@@ -19,7 +19,8 @@ def test_get_edges_and_throughput_from_file(path, expected_result):
     :param expected_result: словарь, у которого ключ - это ребро (кортеж двух чисел например: (1, 2)),
     а значение - это его пропускная способность
     """
-    actual_result = mn.get_edges_and_throughput_from_file(path)
+    graph = mn.Graph(path)
+    actual_result = graph.get_edges_and_throughput_from_file()
     assert actual_result == expected_result
 
 
@@ -35,7 +36,8 @@ def test_get_amount_of_vertex_and_edges_from_file(path, expected_result):
     :param path: путь до файла с данными для задачи
     :param expected_result: кортеж, у которого на первом месте находится количество вершин, на втором - количество ребер
     """
-    actual_result = mn.get_amount_of_vertex_and_edges_from_file(path)
+    graph = mn.Graph(path)
+    actual_result = graph.get_amount_of_vertex_and_edges_from_file()
     assert actual_result == expected_result
 
 
@@ -68,7 +70,7 @@ def test_get_amount_of_vertex_and_edges_from_file(path, expected_result):
         ),
     ],
 )
-def test_initialize_PreFlow(path, source, expected_result):
+def test_initialize_pre_flow(path, source, expected_result):
     """
     :param path: путь до файла с данными для задачи
     :param expected_result: кортеж из двух словарей:
@@ -77,7 +79,8 @@ def test_initialize_PreFlow(path, source, expected_result):
     а значение - это список потока (изначально нулевой), также ставим поток для обратных ребер и остаточной пропускной
     способности
     """
-    actual_result = mn.initialize_PreFlow(source, path)
+    graph = mn.Graph(path)
+    actual_result = graph.initialize_pre_flow(source)
     assert actual_result == expected_result
 
 
@@ -128,7 +131,7 @@ def test_push(
         2) словарь, у которого ключ - это ребро (кортеж двух чисел например: (1, 2)),
     а значение - это список потока и остаточной пропускной способности
     """
-    actual_result = mn.push(
+    actual_result = mn.Graph.push(
         edge, vertex_and_height_excess, edges_and_flow_residual_capacity
     )
     assert actual_result == expected_result
@@ -173,7 +176,7 @@ def test_relabel(
     :param expected_result: словарь, у которого ключ - это вершина, а значение - это список ее высоты и избытка, но
     высота увеличена на единицу
     """
-    actual_result = mn.relabel(
+    actual_result = mn.Graph.relabel(
         vertex, vertex_and_height_excess, edges_and_flow_residual_capacity
     )
     assert actual_result == expected_result
@@ -184,10 +187,10 @@ def test_relabel(
     [
         (1, {(1, 2): [0, 10], (2, 1): [0, 0]}, [2]),
         (1, {(1, 2): [0, 10], (2, 1): [0, 0], (1, 3): [0, 10], (3, 1): [0, 0]}, [2, 3]),
-        (1, {(1, 2): [10, 0], (2, 1): [-10, 10], (1, 3): [0, 10], (3, 1): [0, 0]}, [3]),
+        (1, {(1, 2): [10, 0], (2, 1): [-10, 10], (1, 3): [0, 10], (3, 1): [0, 0]}, [2, 3]),
     ],
 )
-def test_find_adjacent_vertices_with_positive_residual_capacity(
+def test_find_adjacent_vertices(
     vertex, edges_and_flow_residual_capacity, expected_result
 ):
     """
@@ -196,9 +199,7 @@ def test_find_adjacent_vertices_with_positive_residual_capacity(
     а значение - это список потока и остаточной пропускной способности
     :param expected_result: список смежных вершин, у ребер которых остаточная пропускная способность больше нуля
     """
-    actual_result = mn.find_adjacent_vertices_with_positive_residual_capacity(
-        vertex, edges_and_flow_residual_capacity
-    )
+    actual_result = mn.Graph.find_adjacent_vertices(vertex, edges_and_flow_residual_capacity)
     assert actual_result == expected_result
 
 
@@ -210,5 +211,6 @@ def test_find_adjacent_vertices_with_positive_residual_capacity(
     ],
 )
 def test_push_relabel_max_flow(source, sink, path, expected_result):
-    actual_result = mn.push_relabel_max_flow(source, sink, path)
+    graph = mn.Graph(path)
+    actual_result = graph.push_relabel_max_flow(source, sink)
     assert actual_result == expected_result
