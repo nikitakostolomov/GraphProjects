@@ -8,36 +8,23 @@ import MaxFlowFIFO.main as mn
     [
         (
             "TestFiles/TestDataFromTask",
-            {(1, 2): 10000, (1, 3): 10000, (2, 3): 1, (3, 4): 10000, (2, 4): 10000},
+            (
+                (4, 5),
+                {(1, 2): 10000, (1, 3): 10000, (2, 3): 1, (3, 4): 10000, (2, 4): 10000},
+            ),
         ),
-        ("TestFiles/TestData1", {(1, 2): 10}),
+        ("TestFiles/TestData1", ((2, 1), {(1, 2): 10})),
     ],
 )
-def test_get_edges_and_throughput_from_file(path, expected_result):
+def test_get_data_from_file(path, expected_result):
     """
     :param path: путь до файла с данными для задачи
-    :param expected_result: словарь, у которого ключ - это ребро (кортеж двух чисел например: (1, 2)),
-    а значение - это его пропускная способность
+    :param expected_result: кортеж:
+        1) Кортеж из количества вершин и ребер
+        2) Словарь ребер и их пропускных способностей.
     """
     graph = mn.Graph(path)
-    actual_result = graph.get_edges_and_throughput_from_file()
-    assert actual_result == expected_result
-
-
-@pytest.mark.parametrize(
-    ["path", "expected_result"],
-    [
-        ("TestFiles/TestDataFromTask", (4, 5)),
-        ("TestFiles/TestData1", (2, 1)),
-    ],
-)
-def test_get_amount_of_vertex_and_edges_from_file(path, expected_result):
-    """
-    :param path: путь до файла с данными для задачи
-    :param expected_result: кортеж, у которого на первом месте находится количество вершин, на втором - количество ребер
-    """
-    graph = mn.Graph(path)
-    actual_result = graph.get_amount_of_vertex_and_edges_from_file()
+    actual_result = graph.get_data_from_file()
     assert actual_result == expected_result
 
 
@@ -80,41 +67,56 @@ def test_initialize_pre_flow(path, source, expected_result):
     способности
     """
     graph = mn.Graph(path)
-    actual_result = graph.initialize_pre_flow(source)
+    graph.initialize_pre_flow(source)
+    actual_result = (
+        graph.vertex_and_height_excess,
+        graph.edges_and_flow_residual_capacity,
+    )
     assert actual_result == expected_result
 
 
 @pytest.mark.parametrize(
     [
+        "path",
         "edge",
-        "vertex_and_height_excess",
-        "edges_and_flow_residual_capacity",
         "expected_result",
     ],
     [
         (
-            (1, 2),
-            {1: [2, 10], 2: [0, 0]},
-            {(1, 2): [0, 10], (2, 1): [0, 0]},
-            ({1: [2, 0], 2: [0, 10]}, {(1, 2): [10, 0], (2, 1): [-10, 10]}),
+            "TestFiles/TestDataFromTask",
+            (2, 3),
+            {
+                (1, 2): [10000, 0],
+                (2, 1): [-10000, 10000],
+                (1, 3): [10000, 0],
+                (3, 1): [-10000, 10000],
+                (2, 3): [1, 0],
+                (3, 2): [-1, 1],
+                (3, 4): [0, 10000],
+                (4, 3): [0, 0],
+                (2, 4): [0, 10000],
+                (4, 2): [0, 0],
+            },
         ),
         (
-            (1, 2),
-            {1: [2, 10], 2: [0, 0]},
-            {(1, 2): [0, 5], (2, 1): [0, 0]},
-            ({1: [2, 5], 2: [0, 5]}, {(1, 2): [5, 0], (2, 1): [-5, 5]}),
-        ),
-        (
-            (1, 2),
-            {1: [2, 5], 2: [0, 0]},
-            {(1, 2): [0, 10], (2, 1): [0, 0]},
-            ({1: [2, 0], 2: [0, 5]}, {(1, 2): [5, 5], (2, 1): [-5, 5]}),
+            "TestFiles/TestDataFromTask",
+            (2, 4),
+            {
+                (1, 2): [10000, 0],
+                (2, 1): [-10000, 10000],
+                (1, 3): [10000, 0],
+                (3, 1): [-10000, 10000],
+                (2, 3): [0, 1],
+                (3, 2): [0, 0],
+                (3, 4): [0, 10000],
+                (4, 3): [0, 0],
+                (2, 4): [10000, 0],
+                (4, 2): [-10000, 10000],
+            },
         ),
     ],
 )
-def test_push(
-    edge, vertex_and_height_excess, edges_and_flow_residual_capacity, expected_result
-):
+def test_push(path, edge, expected_result):
     """
     1) Если делаем push по ребру и у отдающей вершины избыток равен пропускной способности, то пропускная способность
     ребра становится равной нулю
@@ -122,95 +124,136 @@ def test_push(
     остается
     3) Если делаем push по ребру и у отдающей вершины избыток меньше пропускной способности, то пропускная
     способность ребра станет равна c(u, v) - e(u)
+    :param path: путь до файла с задачей
     :param edge: ребро (кортеж), по которому делаем проталкивание
-    :param vertex_and_height_excess: словарь, у которого ключ - это вершина, а значение - это список ее высоты и избытка
-    :param edges_and_flow_residual_capacity: edges_and_flow_residual_capacity: словарь, у которого ключ - это ребро (кортеж двух чисел например: (1, 2)),
-    а значение - это список потока и остаточной пропускной способности
     :param expected_result: кортеж из двух словарей:
         1) словарь, у которого ключ - это вершина, а значение - это список ее высоты и избытка
         2) словарь, у которого ключ - это ребро (кортеж двух чисел например: (1, 2)),
     а значение - это список потока и остаточной пропускной способности
     """
-    actual_result = mn.Graph.push(
-        edge, vertex_and_height_excess, edges_and_flow_residual_capacity
-    )
+    graph = mn.Graph(path)
+    graph.initialize_pre_flow(1)
+    graph.push(edge)
+    actual_result = graph.edges_and_flow_residual_capacity
     assert actual_result == expected_result
 
 
 @pytest.mark.parametrize(
     [
+        "path",
         "vertex",
-        "vertex_and_height_excess",
-        "edges_and_flow_residual_capacity",
         "expected_result",
     ],
     [
         (
-            1,
-            {1: [0, 5], 2: [1, 0]},
-            {(1, 2): [5, 10], (2, 1): [0, 0]},
-            {1: [2, 5], 2: [1, 0]},
+            "TestFiles/TestDataFromTask",
+            3,
+            {1: [4, 0], 2: [0, 10000], 3: [1, 10000], 4: [0, 0]},
         ),
         (
-            1,
-            {1: [0, 5], 2: [5, 0]},
-            {(1, 2): [5, 10], (2, 1): [0, 0]},
-            {1: [6, 5], 2: [5, 0]},
+            "TestFiles/TestDataFromTask",
+            2,
+            {1: [4, 0], 2: [1, 10000], 3: [0, 10000], 4: [0, 0]},
         ),
         (
+            "TestFiles/TestDataFromTask",
             1,
-            {1: [0, 5], 2: [1, 0], 3: [2, 0]},
-            {(1, 2): [5, 10], (2, 1): [0, 0], (1, 3): [5, 10], (3, 1): [0, 0]},
-            {1: [2, 5], 2: [1, 0], 3: [2, 0]},
+            {1: [4, 0], 2: [0, 10000], 3: [0, 10000], 4: [0, 0]},
         ),
     ],
 )
-def test_relabel(
-    vertex, vertex_and_height_excess, edges_and_flow_residual_capacity, expected_result
-):
+def test_relabel(path, vertex, expected_result):
     """
+    :param path: путь до файла с задачей
     :param vertex: вершина, которую нужно поднять
-    :param vertex_and_height_excess: словарь, у которого ключ - это вершина, а значение - это список ее высоты и избытка
-    :param edges_and_flow_residual_capacity: edges_and_flow_residual_capacity: словарь, у которого ключ - это ребро
-    (кортеж двух чисел например: (1, 2)), а значение - это список потока и остаточной пропускной способности
     :param expected_result: словарь, у которого ключ - это вершина, а значение - это список ее высоты и избытка, но
     высота увеличена на единицу
     """
-    actual_result = mn.Graph.relabel(
-        vertex, vertex_and_height_excess, edges_and_flow_residual_capacity
-    )
+    graph = mn.Graph(path)
+    graph.initialize_pre_flow(1)
+    graph.relabel(vertex)
+    actual_result = graph.vertex_and_height_excess
     assert actual_result == expected_result
 
 
 @pytest.mark.parametrize(
-    ["vertex", "edges_and_flow_residual_capacity", "expected_result"],
+    ["path", "vertex", "expected_result"],
     [
-        (1, {(1, 2): [0, 10], (2, 1): [0, 0]}, [2]),
-        (1, {(1, 2): [0, 10], (2, 1): [0, 0], (1, 3): [0, 10], (3, 1): [0, 0]}, [2, 3]),
-        (1, {(1, 2): [10, 0], (2, 1): [-10, 10], (1, 3): [0, 10], (3, 1): [0, 0]}, [2, 3]),
+        ("TestFiles/TestDataFromTask", 1, [2, 3]),
+        ("TestFiles/TestDataFromTask", 2, [1, 3, 4]),
+        ("TestFiles/TestDataFromTask", 3, [1, 2, 4]),
     ],
 )
-def test_find_adjacent_vertices(
-    vertex, edges_and_flow_residual_capacity, expected_result
-):
+def test_find_adjacent_vertices(path, vertex, expected_result):
     """
+    :param path: путь до файла с задачей
     :param vertex: вершина, для которой нужно найти смежные вершины
-    :param edges_and_flow_residual_capacity: словарь, у которого ключ - это ребро (кортеж двух чисел например: (1, 2)),
-    а значение - это список потока и остаточной пропускной способности
     :param expected_result: список смежных вершин, у ребер которых остаточная пропускная способность больше нуля
     """
-    actual_result = mn.Graph.find_adjacent_vertices(vertex, edges_and_flow_residual_capacity)
+    graph = mn.Graph(path)
+    graph.initialize_pre_flow(1)
+    actual_result = graph.find_adjacent_vertices(vertex)
     assert actual_result == expected_result
 
 
 @pytest.mark.parametrize(
-    ["source", "sink", "path", "expected_result"],
+    ["path", "source", "destination", "expected_result"],
     [
-        (1, 4, "TestFiles/TestDataFromTask", 20000),
-        (1, 2, "TestFiles/TestData1", 10),
+        ("TestFiles/TestDataFromTask", 2, 4, 1),
+        ("TestFiles/TestDataFromTask", 3, 4, 1),
+        ("TestFiles/TestDataFromTask", 4, 1, False),
+        ("TestFiles/TestDataFromTask", 1, 4, False),
     ],
 )
-def test_push_relabel_max_flow(source, sink, path, expected_result):
+def test_bfs(path, source, destination, expected_result):
+    """
+    Если сток или исток недостижимы, то вернется False, иначе расстояние до пункта назначения
+    :param path: путь до файла с задачей
+    :param source: вершина, из которой начинается bfs
+    :param destination: сток или исток, если сток недостижим
+    :param expected_result: расстояние от вершины до пункта назначения
+    """
     graph = mn.Graph(path)
-    actual_result = graph.push_relabel_max_flow(source, sink)
+    graph.initialize_pre_flow(1)
+    actual_result = graph.bfs(source, destination)
+    assert actual_result == expected_result
+
+
+@pytest.mark.parametrize(
+    ["path", "glob_value", "expected_result"],
+    [
+        ("TestFiles/TestDataFromTask", 1, 1),
+        ("TestFiles/TestDataFromTask", 5, 5),
+    ],
+)
+def test_try_global_relabeling(path, glob_value, expected_result):
+    """
+    :param path: путь до файла с задачей
+    :param glob_value: число повторений, через которое можно запускать global relabeling (по умолчанию - 1)
+    :param expected_result:
+    """
+    graph = mn.Graph(path)
+    graph.push_relabel_max_flow(1, 4, glob_value)
+    actual_result = graph.glob_rel_value
+    assert actual_result == expected_result
+
+
+@pytest.mark.parametrize(
+    ["source", "sink", "glob_value", "path", "expected_result"],
+    [
+        (1, 4, 1, "TestFiles/TestDataFromTask", 20000),
+        (1, 2, 1, "TestFiles/TestData1", 10),
+    ],
+)
+def test_push_relabel_max_flow(source, sink, path, glob_value, expected_result):
+    """
+    :param source: источник
+    :param sink: сток
+    :param path: путь до файла с задачей
+    :param glob_value: число, global_relabeling будет запускаться через каждые glob_rel_value элементарных
+        операций (push, relabel)
+    :param expected_result: избыток стока
+    """
+    graph = mn.Graph(path)
+    actual_result = graph.push_relabel_max_flow(source, sink, glob_value)
     assert actual_result == expected_result
