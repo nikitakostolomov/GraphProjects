@@ -73,9 +73,7 @@ class Graph:
 
         return vertexes_edges, edges_and_throughput
 
-    def push_relabel_max_flow(
-        self
-    ) -> None:
+    def push_relabel_max_flow(self) -> None:
         """
         Вершины с положительным избытком обрабатываются (просматриваются) в порядке first-in, first-out.
         Вершина извлекается из списка и делаются операции push пока это возможно. Новые вершины с избытком добавляются в
@@ -89,7 +87,9 @@ class Graph:
 
         self.initialize_pre_flow(self.source)
 
-        vertices_with_excess = collections.deque()  # пустой список вершин с положительным избытком
+        vertices_with_excess = (
+            collections.deque()
+        )  # пустой список вершин с положительным избытком
 
         for (
             vertex,
@@ -163,7 +163,6 @@ class Graph:
                 # операций равно заданному количеству повторений
 
         self.max_flow = self.vertex_and_height_excess[self.sink][1]
-
 
     def find_adjacent_vertices(self, vertex: int) -> list:
         """
@@ -353,7 +352,9 @@ class Graph:
         if destination != -1:
             bfs_with_destination = True  # значит bfs используется для global relabeling
         else:
-            bfs_with_destination = False  # значит bfs используется для нахождения min cut
+            bfs_with_destination = (
+                False  # значит bfs используется для нахождения min cut
+            )
 
         vertices_dist = {}  # пустой словарь вершин и расстояний
 
@@ -434,10 +435,15 @@ class Graph:
         с помощью bfs, все найденные вершины будут слева от разреза, остальные справа. Минимальный разрезом будет сумма
         пропускных способностей ребер, соединяющих вершины слева и справа от разреза.
         """
-        vertices_accessible_from_source = self.bfs(self.source)  # ищем вершины, до которых можно добраться из истока
+        vertices_accessible_from_source = self.bfs(
+            self.source
+        )  # ищем вершины, до которых можно добраться из истока
 
         for edge in self.edges_and_throughput:
-            if edge[0] in vertices_accessible_from_source and edge[1] not in vertices_accessible_from_source:
+            if (
+                edge[0] in vertices_accessible_from_source
+                and edge[1] not in vertices_accessible_from_source
+            ):
                 self.min_cut += self.edges_and_throughput[edge]
 
     def do_all_work(self, source: int, sink: int, glob_rel_value: int = 1) -> None:
@@ -456,7 +462,9 @@ class Graph:
         self.push_relabel_max_flow()
         self.get_min_cut()
 
-        print(f"Максимальный поток: {self.max_flow}\nМинимальный разрез: {self.min_cut}")
+        print(
+            f"Максимальный поток: {self.max_flow}\nМинимальный разрез: {self.min_cut}"
+        )
         print(f"Равны ли они: {self.max_flow == self.min_cut}")
 
     @property
