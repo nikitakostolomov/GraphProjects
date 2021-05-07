@@ -51,6 +51,9 @@ class Graph:
         self._amount_of_push_and_rel = 0
         self._glob_rel_value = 1
 
+        self._max_flow = 0
+        self._min_cut = 0
+
     def get_data_from_file(self) -> Tuple[tuple, dict]:
         """
         Принимаем путь до файла, читаем его и возвращаем кортеж:
@@ -71,8 +74,8 @@ class Graph:
         return vertexes_edges, edges_and_throughput
 
     def push_relabel_max_flow(
-        self, source: int, sink: int, glob_rel_value: int = 1
-    ) -> int:
+        self
+    ) -> None:
         """
         Вершины с положительным избытком обрабатываются (просматриваются) в порядке first-in, first-out.
         Вершина извлекается из списка и делаются операции push пока это возможно. Новые вершины с избытком добавляются в
@@ -81,19 +84,12 @@ class Graph:
         (опять же только если вершина не является стоком).
         Global relabeling можно запускать через каждые m элементарных операций (push - relabel). Здесь glob_rel_value -
         это m.
-        :param source: источник
-        :param sink: сток
-        :param glob_rel_value: число, global_relabeling будет запускаться через каждые glob_rel_value элементарных
-        операций (push, relabel)
         :return: избыток стока
         """
-        self.source = source
-        self.sink = sink
-        self.glob_rel_value = glob_rel_value
 
         self.initialize_pre_flow(self.source)
 
-        vertices_with_excess = []  # пустой список вершин с положительным избытком
+        vertices_with_excess = collections.deque()  # пустой список вершин с положительным избытком
 
         for (
             vertex,
@@ -106,7 +102,7 @@ class Graph:
 
         while vertices_with_excess:  # пока список не пуст, цикл работает
             vertex_with_positive_excess = (
-                vertices_with_excess.pop()
+                vertices_with_excess.popleft()
             )  # извлекаем последний элемент
 
             adjacent_vertices = self.find_adjacent_vertices(
@@ -150,13 +146,13 @@ class Graph:
                     # операций равно заданному количеству повторений
 
                     if (
-                        vertex != sink
+                        vertex != self.sink
                     ):  # если вершина не является стоком, добавляем ее в конец списка
                         vertices_with_excess.append(vertex)
 
             if (
                 self.vertex_and_height_excess[vertex_with_positive_excess][1] > 0
-                and vertex_with_positive_excess != sink
+                and vertex_with_positive_excess != self.sink
             ):  # relabel выполняем только если избыток вершины больше нуля и вершина не является стоком
                 self.relabel(
                     vertex_with_positive_excess,
@@ -166,7 +162,8 @@ class Graph:
                 self.try_global_relabeling()  # запускаем global relabeling, если количество повторений элементарных
                 # операций равно заданному количеству повторений
 
-        return self.vertex_and_height_excess[sink][1]
+        self.max_flow = self.vertex_and_height_excess[self.sink][1]
+
 
     def find_adjacent_vertices(self, vertex: int) -> list:
         """
@@ -340,7 +337,7 @@ class Graph:
                 adjacent_vertices[vertex_with_min_height] + 1
             )  # поднимаем нашу вершину
 
-    def bfs(self, source: int, destination: int) -> int or False:
+    def bfs(self, source: int, destination: int = -1) -> int or False or set:
         """
         Начинаем обход графа с вершины (source) и идем, пока не дойдем до пункта назначения (destination), также считаем
         расстояния от вершины до пункта назначения. Далее возвращаем расстояние до пункта назнаечния.
@@ -353,34 +350,54 @@ class Graph:
             [source]
         )  # посещенные вершины - множество, смежные с ними попадают
         # в очередь
-        vertices_dist = {
-            vertex: 1_000_000 for vertex in self.vertex_and_height_excess
-        }  # словарь вершин и расстояний
+        if destination != -1:
+            bfs_with_destination = True  # значит bfs используется для global relabeling
+        else:
+            bfs_with_destination = False  # значит bfs используется для нахождения min cut
+
+        vertices_dist = {}  # пустой словарь вершин и расстояний
+
+        if bfs_with_destination:
+            vertices_dist = {
+                vertex: 1_000_000 for vertex in self.vertex_and_height_excess
+            }  # словарь вершин и расстояний
+
+            vertices_dist[
+                source
+            ] = 0  # расстояние от вершины до нее самой ставим равным нулю
 
         visited.add(source)
-        vertices_dist[
-            source
-        ] = 0  # расстояние от вершины до нее самой ставим равным нулю
 
         while queue:
             vertex = queue.popleft()
             neighbours = self.find_adjacent_vertices(vertex)
 
             for neighbour in neighbours:
-                flow = self.edges_and_flow_residual_capacity[vertex, neighbour][0]
                 res_cap = self.edges_and_flow_residual_capacity[vertex, neighbour][1]
 
-                if (
-                    neighbour not in visited and flow < res_cap
-                ):  # если вершина еще не посещена и ребро не насыщено
-                    visited.add(neighbour)  # то вершину добавляем в посещенные
-                    vertices_dist[neighbour] = vertices_dist[vertex] + 1
-                    queue.append(neighbour)
+                if bfs_with_destination:
+                    flow = self.edges_and_flow_residual_capacity[vertex, neighbour][0]
 
-                    if neighbour == destination:
-                        return vertices_dist[neighbour]
+                    if (
+                        neighbour not in visited and flow < res_cap
+                    ):  # если вершина еще не посещена и ребро не насыщено
+                        visited.add(neighbour)  # то вершину добавляем в посещенные
+                        vertices_dist[neighbour] = vertices_dist[vertex] + 1
+                        queue.append(neighbour)
 
-        return False
+                        if neighbour == destination:
+                            return vertices_dist[neighbour]
+                else:
+                    if (
+                        neighbour not in visited and res_cap > 0
+                    ):  # если вершина еще не посещена и пропускная способность ребра больше нуля
+                        visited.add(neighbour)  # то вершину добавляем в посещенные
+                        queue.append(neighbour)
+
+        if bfs_with_destination:
+            return False
+        else:
+            return visited
 
     def global_relabeling(self) -> None:
         """
@@ -410,6 +427,37 @@ class Graph:
         else:
             self.global_relabeling()
             self.amount_of_push_and_rel = 0
+
+    def get_min_cut(self):
+        """
+        Находит минимальный разрез следующим способом: пытаемся добраться до всех вершин из истока в остаточной сети
+        с помощью bfs, все найденные вершины будут слева от разреза, остальные справа. Минимальный разрезом будет сумма
+        пропускных способностей ребер, соединяющих вершины слева и справа от разреза.
+        """
+        vertices_accessible_from_source = self.bfs(self.source)  # ищем вершины, до которых можно добраться из истока
+
+        for edge in self.edges_and_throughput:
+            if edge[0] in vertices_accessible_from_source and edge[1] not in vertices_accessible_from_source:
+                self.min_cut += self.edges_and_throughput[edge]
+
+    def do_all_work(self, source: int, sink: int, glob_rel_value: int = 1) -> None:
+        """
+        Запускает функцию на нахождения максимального потока и функцию на нахождения минимального разреза.
+        :param source: источник
+        :param sink: сток
+        :param glob_rel_value: число, global_relabeling будет запускаться через каждые glob_rel_value элементарных
+        операций (push, relabel)
+        :return:
+        """
+        self.source = source
+        self.sink = sink
+        self.glob_rel_value = glob_rel_value
+
+        self.push_relabel_max_flow()
+        self.get_min_cut()
+
+        print(f"Максимальный поток: {self.max_flow}\nМинимальный разрез: {self.min_cut}")
+        print(f"Равны ли они: {self.max_flow == self.min_cut}")
 
     @property
     def source(self):
@@ -473,9 +521,27 @@ class Graph:
         """Setter для числа повторений, через которое можно запускать global relabeling"""
         self._glob_rel_value = glob_rel_value
 
+    @property
+    def max_flow(self):
+        """Getter для ответа"""
+        return self._max_flow
+
+    @max_flow.setter
+    def max_flow(self, max_flow):
+        """Setter для ответа"""
+        self._max_flow = max_flow
+
+    @property
+    def min_cut(self):
+        """Getter для минимального разреза"""
+        return self._min_cut
+
+    @min_cut.setter
+    def min_cut(self, min_cut):
+        """Setter для минимального разреза"""
+        self._min_cut = min_cut
+
 
 if __name__ == "__main__":
     g = Graph("TestFiles/TestDataFromTask")
-    g.initialize_pre_flow(1)
-    print(g.vertex_and_height_excess)
-    print(g.edges_and_flow_residual_capacity)
+    g.do_all_work(1, 4)
