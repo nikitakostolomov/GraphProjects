@@ -22,7 +22,9 @@ class Graph:
     Global Relabeling можно запускать через каждые m элементарных операций (push - relabel).
     """
 
-    def __init__(self, path: str):
+    def __init__(
+        self, *, amount_of_vertex_and_edges=None, edges_and_throughput=None, path=None
+    ):
         """
         Конструктор класса
         :param path: путь до файла с задачей
@@ -42,11 +44,15 @@ class Graph:
         _min_cut_object: вершины, находящиеся слева от разреза
         _min_cut_background: вершины, находящиеся справа от разреза
         """
-        self.path = path
-        (
-            self.amount_of_vertex_and_edges,
-            self.edges_and_throughput,
-        ) = self.get_data_from_file()
+        if path is not None:
+            self.path = path
+            (
+                self.amount_of_vertex_and_edges,
+                self.edges_and_throughput,
+            ) = self.get_data_from_file()
+        else:
+            self.amount_of_vertex_and_edges = amount_of_vertex_and_edges
+            self.edges_and_throughput = edges_and_throughput
 
         self.start = 1
         self.end = self.amount_of_vertex_and_edges[0]
@@ -580,22 +586,26 @@ def read_files_and_find_max_flow(directory):
     for file in files:
         print("-" * 30, file, "-" * 30)
         start = time.time()
-        g = Graph(directory + "/" + file)
+        g = Graph(path=directory + "/" + file)
         g.push_relabel_max_flow()
         g.get_min_cut()
         print("Значение максимального потока:", g.max_flow)
-        print("Вершины слева от разреза:", g.min_cut_object)
-        print("Вершины справа от разреза:", g.min_cut_background)
+        # print("Вершины слева от разреза:", g.min_cut_object)
+        # print("Вершины справа от разреза:", g.min_cut_background)
+        print("Минимальный разрез: ", g.min_cut)
+        g.check_equality_min_cut_and_max_flow()
         end = time.time()
         print("Времени заняло:", round(end - start, 3))
 
 
 if __name__ == "__main__":
-    read_files_and_find_max_flow(
-        "MaxFlow-tests"
-    )  # для работы с директорией, в которой находятся тесты
+    # read_files_and_find_max_flow(
+    #     "MaxFlow-tests"
+    # )  # для работы с директорией, в которой находятся тесты
 
-    # g = Graph("MaxFlow-tests/test_4.txt")  # для работы с конкретным файлом, лучше указывать полный путь
-    # g.push_relabel_max_flow()
-    # g.get_min_cut()
-    # print(g.max_flow, g.min_cut_object, g.min_cut_background)
+    g = Graph(
+        path="MaxFlow-tests/test_4.txt"
+    )  # для работы с конкретным файлом, лучше указывать полный путь
+    g.push_relabel_max_flow()
+    g.get_min_cut()
+    print(g.max_flow, g.min_cut_object, g.min_cut_background)
