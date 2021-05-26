@@ -3,27 +3,30 @@ import numpy as np
 from PIL import Image
 
 
-def main():
+def algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_neighbors, lyambda, sigma):
     # test data
-    """white = 255
-    black = 0
-    image = np.array([[200, 180, 10], [180, 10, 0]])
-    obj_pixels = {(0, 0)}
-    bg_pixels = {(1, 1)}
-    is_four_neighbors = True
-    lyambda = 1
-    sigma = 1
-    verifier = np.array([[white, white, black], [white, black, black]])"""
+    # white = 255
+    # black = 0
+    # image = np.array([[200, 180, 20], [180, 160, 10], [160, 20, 10]])
+    # obj_pixels = {(1, 1)}
+    # bg_pixels = {(2, 1)}
+    # is_four_neighbors = True
+    # lyambda = 1
+    # sigma = 1
+    # verifier = np.array([[white, white, black], [white, white, black], [white, black, black]])
 
-    img = Image.open('test1.jpeg')
+    img = Image.open(file_name)
     image = np.asarray(img)
-    obj_pixels = {(320, 360)}
-    bg_pixels = {(1, 1)}
-    is_four_neighbors = True
-    lyambda = 1
-    sigma = 1
-    ver_img = Image.open('test2.bmp')
+    ver_img = Image.open(verifier_name)
     verifier = np.asarray(ver_img)
+
+    print(f"Object pixels are: ")
+    print(obj_pixels)
+    print(f"Background pixels are: ")
+    print(bg_pixels)
+    print(f"Lambda={lyambda}, Sigma={sigma}")
+    # print(image[0][0])
+    # print(verifier[0][0])
 
     # 0. preparatory stage
     m = image.shape[0]
@@ -32,39 +35,43 @@ def main():
     # 1. build graph by image
     graph = alg.graph_by_image(m, n, is_four_neighbors)
     print("Graph was created")
+    # print(graph)
+    # print("=================")
+    # print()
 
     # 2. get weights for graph
     alg.get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma)
     print("Weights were got")
+    # print(graph)
+    # print("=============")
+    # print()
 
     # 3. get min cut for graph
     obj, bg = alg.get_min_cut(graph)
     print("Cut was got")
+    # print(obj)
+    # print(bg)
 
     # 4. get image by min cut
     img = alg.get_splitting(m, n, obj)
     jpg = Image.fromarray(img)
-    jpg.save('test.jpeg')
+    jpg.save('test.bmp')
     print("Splitting was got")
 
     # 5. get metrics
     tfm, tsm = alg.get_metrics(img, verifier)  # the first metric, the second metric
-    print(f"The first metric: {tfm}\nThe second metric: {tsm}")
+    print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
 
 
-def test():
-    img = Image.open('test1.jpeg')
-    # print(img)
-    data = np.asarray(img)
-    print(type(data))
-    print(data.shape)
-    # print(data)
-    img2 = Image.fromarray(data)
-    print(type(img2))
-    print(img2.mode)
-    print(img2.size)
-    # print(img2)
-    img2.save('test2.jpeg')
+def main():
+    file_name = 'banana2-gr.jpg'
+    verifier_name = 'banana2.bmp'
+    obj_pixels = {(211, 61), (306, 215), (375, 151), (354, 307), (303, 397), (391, 458), (284, 538), (165, 538), (94, 542)}
+    bg_pixels = {(16, 20), (63, 305), (53, 576), (246, 354), (379, 34), (8, 631), (473, 12), (471, 330), (452, 615), (439, 303)}
+    is_four_neighbors = False
+    lyambda = 1
+    sigma = 0.01
+    algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_neighbors, lyambda, sigma)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial import distance
+import networkx as nx
 
 white = 255
 
@@ -106,9 +107,10 @@ def get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma):
         ip = image[p // n][p % n]
         iq = image[q // n][q % n]
         dist = distance.euclidean((p // n, p % n), (q // n, q % n))
-        n_links[(p, q)] = 1 if ip <= iq else np.exp(-pow((ip - iq), 2) / 2 / pow(sigma, 2)) / dist
+        n_links[(p, q)] = 1 if ip <= iq else np.exp(-pow((ip - iq), 2) / (2 * pow(sigma, 2))) / dist
         sum_of_bpq[p] = sum_of_bpq.get(p, 0) + n_links[(p, q)]
     k = 1 + sum_of_bpq[max(sum_of_bpq, key=lambda i: sum_of_bpq[i])]
+    # print(k)
     hist_range = (0, 256)
 
     obj_hist = np.histogram([0], 1, hist_range, density=True)
@@ -123,14 +125,19 @@ def get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma):
         bg_bins_number = len(bg_intensity_list) if len(bg_intensity_list) <= 255 else 255
         bg_hist = np.histogram(bg_intensity_list, bg_bins_number, hist_range, density=True)
 
+    # print(obj_pixels)
+    # print(bg_pixels)
     for p in range(m * n):
-        if p in obj_pixels:
+        if (p // n, p % n) in obj_pixels:
+            # print(f"{p} in obj_pixels")
             t_links[(m * n, p)] = k
             t_links[(p, m * n + 1)] = 0
-        elif p in bg_pixels:
+        elif (p // n, p % n) in bg_pixels:
+            # print(f"{p} in bg_pixels")
             t_links[(m * n, p)] = 0
             t_links[(p, m * n + 1)] = k
         else:
+            # print(f"{p} not in obj_pixels and bg_pixels")
             ip = image[p // n][p % n]
             pr_obj = obj_hist[0][binary_search(obj_hist[1], ip)]
             pr_bg = bg_hist[0][binary_search(bg_hist[1], ip)]
@@ -139,6 +146,7 @@ def get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma):
             pr_bg = 1.0 - pr_obj
             r_obj = -np.log(pr_obj)
             r_bg = -np.log(pr_bg)
+            # print(p, pr_obj, pr_bg, r_obj, r_bg)
 
             t_links[(m * n, p)] = lyambda * r_bg
             t_links[(p, m * n + 1)] = lyambda * r_obj
@@ -147,12 +155,63 @@ def get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma):
 def get_splitting(m, n, obj):
     img = np.zeros((m, n), dtype=int)
     for x in obj:
-        img[x // n][x % n] = white
+        if x == m * n:
+            # print("Ola!")
+            pass
+        elif x == m * n + 1:
+            # print("WRONG!")
+            pass
+        else:
+            img[x // n][x % n] = white
     return img.astype(np.uint8)
 
 
 def get_min_cut(graph):
-    return [i for i in range(graph[0][0] // 2)], [i for i in range(graph[0][0] // 2, graph[0][0])]
+    # edges = {}
+    # for i, j in graph[1]:
+    #     edges[(i + 2, j + 2)] = graph[1][(i, j)]
+    # for i, j in graph[2]:
+    #     if i == graph[0][0] - 2:
+    #         edges[(1, j + 2)] = graph[2][(i, j)]
+    #     else:
+    #         edges[(i + 2, j + 1)] = graph[2][(i, j)]
+    #
+    # file = open("MyFile.txt", "w")
+    # file.write(f"{graph[0][0]} {graph[0][1]}\n")
+    # for i, j in edges:
+    #     file.write(f"{i} {j} {edges[(i, j)]}\n")
+    # file.close()
+    #
+    # g = min_cut.Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
+    # g.push_relabel_max_flow()
+    # g.get_min_cut()
+    #
+    # print("========min_cut_obj_unfixed=========")
+    # print(g.min_cut_object)
+    # print("========min_cut_bg_unfixed=========")
+    # print(g.min_cut_background)
+    # print("===================================")
+    # print()
+    # ans_obj = []
+    # for i in g.min_cut_object:
+    #     if i != 1:
+    #         ans_obj.append(i - 2)
+    # ans_bg = []
+    # for i in g.min_cut_background:
+    #     if i != graph[0][0]:
+    #         ans_bg.append(i - 2)
+    # return ans_obj, ans_bg
+
+    G = nx.DiGraph()
+    for i, j in graph[1]:
+        G.add_edge(i, j, capacity=graph[1][(i, j)])
+    for i, j in graph[2]:
+        G.add_edge(i, j, capacity=graph[2][(i, j)])
+
+    cut_value, partition = nx.minimum_cut(G, graph[0][0] - 2, graph[0][0] - 1)
+    reachable, non_reachable = partition
+    print(f"Cut value is {np.round(cut_value, 3)}")
+    return reachable, non_reachable
 
 
 def get_metrics(img, verifier):
@@ -166,13 +225,13 @@ def get_metrics(img, verifier):
     caps = 0  # number of pixels in the intersection of objects in two images
     for i in range(m):
         for j in range(n):
-            if np.array_equal(img[i][j], white):
-                if np.array_equal(verifier[i][j], white):
+            if img[i][j] == white:
+                if verifier[i][j] == white:
                     caps = caps + 1
                 cups = cups + 1
-            elif np.array_equal(verifier[i][j], white):
+            elif verifier[i][j] == white:
                 cups = cups + 1
-            if np.array_equal(img[i][j], verifier[i][j]):
+            if img[i][j] == verifier[i][j]:
                 counter = counter + 1
 
     return counter / (m * n), caps / cups
