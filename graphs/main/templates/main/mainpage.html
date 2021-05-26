@@ -1,0 +1,134 @@
+{% extends 'main/wrapper.html' %}
+{% load static %}
+{% block title %} Сегментация {% endblock %} 
+{% block content %}
+
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+     {{ form.as_p }}
+    <button type="submit"> Загрузить изображение </button>
+</form> 
+
+<!-- Если изображение уже загружено -->
+{% if is_download_img %}
+    <label class="switch">
+        <input id ="type_of_pixels" type="checkbox">
+        <span class="slider round"></span>
+    </label>
+    <form action="segmentation" method="post">
+        {% csrf_token %}
+        <input id="object_pixels" name="object_pixels" value="">
+        <input id="background_pixels" name="background_pixels" value="">
+        <input type="submit" value="Запуск алгоритма">
+    </form>
+    </div>
+        <canvas id=canvas width=800px height=800px></canvas>
+        <canvas id=pixel_canvas></canvas>
+    </div>
+    </div>
+    <canvas id=result_canvas width=800px height=800px></canvas>
+    </div>
+
+    <script>
+        var canvas=document.getElementById("canvas");
+        var pixel_canvas=document.getElementById("pixel_canvas");
+        var context=canvas.getContext("2d");
+        var pixel_context=pixel_canvas.getContext("2d");
+        var image=new Image();
+        image.src="/media/{{ img }}";
+        image.crossOrigin = 'anonymous';
+        var width;
+        var height;
+        var radius=7;
+        var pushable;
+        var object_pixels=[]; 
+        var background_pixels=[];
+        var is_background;
+        var result = document.getElementById("result_canvas");
+        var result_context = result.getContext("2d");
+        const red='rgba(255,0,0,0.3)';
+        const green='rgba(0,255,0,0.3)';
+        const screenWidth = window.screen.width
+        const screenHeight = window.screen.height
+        
+        function circle(x,y,radius,color){
+            pixel_context.fillStyle = color;
+            pixel_context.beginPath();
+            pixel_context.arc(x,y, radius, 0, 2 * Math.PI);
+            pixel_context.closePath();
+            pixel_context.fill();   
+        }
+        // Когда картинка загрузилась, масштабируем её под канвас
+        image.onload=function(){
+            var hRatio = canvas.width  / image.width    ;
+            var vRatio =  canvas.height / image.height  ;
+            var ratio  = Math.min ( hRatio, vRatio );
+            width = image.width*ratio;
+            height = image.height*ratio;
+            context.clearRect(0,0,canvas.width, canvas.height);
+            canvas.width = width;
+            canvas.height = height;
+            pixel_canvas.width = width;
+            pixel_canvas.height = height; 
+            context.drawImage(image, 0,0, width, height); 
+            // Присваиваем окну результата такие же ширину, высоту
+            
+            result.width = width;
+            result.height = height;
+            result_context.rect(0, 0, 100000, 100000);
+            result_context.fillStyle = 'red';
+            result_context.fill();
+        } 
+
+             
+        // При нажатии на холст рисуем кружочки
+        pixel_canvas.onclick=function(e){
+            if (document.getElementById('type_of_pixels').checked){
+                choose_pixel(e,background_pixels,green);
+                document.getElementById('background_pixels').value=background_pixels;
+            }
+            else {
+                choose_pixel(e,object_pixels,red);
+                document.getElementById('object_pixels').value=object_pixels;
+            }
+        }
+
+        function choose_pixel(e,pixels,color){
+            pushable = true;
+            // для совместимости с другими браузерами
+            if(e.offsetX==undefined) {
+                var x = e.pageX-$(canvas).offset().left;
+                var y = Math.round(e.pageY-$(canvas).offset().top);
+            } 
+            else {
+                var x = e.offsetX;
+                var y = e.offsetY;
+            }
+            //Если нажал внутрь существующего кружочка, удаляем его
+            for (let i = 0; i < pixels.length ; i++){
+                if (Math.sqrt(Math.pow(x-pixels[i][0], 2)+Math.pow(y-pixels[i][1], 2))<=radius){
+                    pixel_context.clearRect(0,0,canvas.width, canvas.height);
+                    pixels[i] = pixels[pixels.length - 1];
+                    pixels.length--;
+                    i--;
+                    pushable = false;
+                }
+            };
+            if(pushable){
+                pixels.push([x,y]);
+                circle(x,y,radius,color);
+            }
+            else {
+                for (let i = 0; i < object_pixels.length ; i++){
+                    circle(object_pixels[i][0],object_pixels[i][1],radius,red);
+                };  
+                for (let i = 0; i < background_pixels.length ; i++){
+                    circle(background_pixels[i][0],background_pixels[i][1],radius,green);
+                };  
+
+            }   
+            };
+    </script>
+{% endif %}
+{% endblock %}
