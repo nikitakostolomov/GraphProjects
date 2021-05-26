@@ -3,32 +3,37 @@
 {% block title %} Сегментация {% endblock %} 
 {% block content %}
 
-
-<form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-     {{ form.as_p }}
-    <button type="submit"> Загрузить изображение </button>
-</form> 
-
-<!-- Если изображение уже загружено -->
-{% if is_download_img %}
-    <label class="switch">
-        <input id ="type_of_pixels" type="checkbox">
-        <span class="slider round"></span>
-    </label>
-    <form action="segmentation" method="post">
-        {% csrf_token %}
-        <input id="object_pixels" name="object_pixels" value="">
-        <input id="background_pixels" name="background_pixels" value="">
-        <input type="submit" value="Запуск алгоритма">
-    </form>
+<div class="main"> 
+    <div class="container"> 
+        <form method="post" class="inline" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" class="inline" name="csrfmiddlewaretoken" value="lgEVz55fniuHAfrGsaiiakAzGlueFqlee2CG3Zqdh0Ay2dR8X37uAIwmOl21OA6K">
+            <input type="file" class="inline" name="image" accept="image/*" required id="id_image">
+            <button type="submit" class ="my-button inline"> Загрузить изображение </button>
+        </form> 
+        <!-- Если изображение уже загружено -->
+        {% if is_download_img %}
+        <form action="segmentation" method="post" class="inline">
+            {% csrf_token %}
+            <input class="hidden" id="object_pixels" name="object_pixels" value="">
+            <input class="hidden" id="background_pixels" name="background_pixels" value="">
+            <input type="submit"  class ="my-button" value="Запуск алгоритма">
+        </form>
+            <input type="button" class ="my-button inline" value ="Сброс" onclick=dropping()>
+        <label class="switch inline">
+            <input id ="type_of_pixels" class="inline" type="checkbox" onclick=changespan()> 
+            <span class="slider round"></span>
+        </label>
+        <span id="type_of_choose">
+            Выбор пикселей объекта
+        </span>
     </div>
-        <canvas id=canvas width=800px height=800px></canvas>
-        <canvas id=pixel_canvas></canvas>
+    <div class="screen">
+            <canvas id=canvas width=600vmax height=600vmax></canvas>
+            <canvas id=pixel_canvas></canvas>
+            <canvas id=result_canvas></canvas>
     </div>
-    </div>
-    <canvas id=result_canvas width=800px height=800px></canvas>
-    </div>
+</div>
 
     <script>
         var canvas=document.getElementById("canvas");
@@ -59,6 +64,10 @@
             pixel_context.closePath();
             pixel_context.fill();   
         }
+        function changespan(){
+            if (document.getElementById('type_of_pixels').checked) document.getElementById("type_of_choose").textContent='Выбор пикселей фона';
+            else document.getElementById("type_of_choose").textContent='Выбор пикселей объекта';
+        };
         // Когда картинка загрузилась, масштабируем её под канвас
         image.onload=function(){
             var hRatio = canvas.width  / image.width    ;
@@ -72,12 +81,10 @@
             pixel_canvas.width = width;
             pixel_canvas.height = height; 
             context.drawImage(image, 0,0, width, height); 
-            // Присваиваем окну результата такие же ширину, высоту
-            
+
+            // Окно результата
             result.width = width;
             result.height = height;
-            result_context.rect(0, 0, 100000, 100000);
-            result_context.fillStyle = 'red';
             result_context.fill();
         } 
 
@@ -128,7 +135,14 @@
                 };  
 
             }   
-            };
+        };
+        function dropping(){
+            pixel_context.clearRect(0,0,canvas.width, canvas.height);
+            object_pixels=[]; 
+            background_pixels=[];
+
+
+        }
     </script>
 {% endif %}
 {% endblock %}
