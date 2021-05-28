@@ -6,7 +6,7 @@ from PIL import Image
 from numpy import asarray
 import itertools
 from .algorithms import graph_by_image
-from .main import algorithm
+from .algorithms import start_algorithm
 from .models import Result
 import numpy as np
 
@@ -55,7 +55,7 @@ def segmentation(request):
     if request.method == 'POST':
         object_pixels = convert_str_to_list(request.POST.get('object_pixels', ''))
         background_pixels = convert_str_to_list(request.POST.get('background_pixels', ''))
-        result_img = algorithm(img_url, img_verify_url, object_pixels, background_pixels, is_four_neighbors=True,  lyambda = 1, sigma = 1)
+        result_img = start_algorithm(img_url, img_verify_url, object_pixels, background_pixels, is_four_neighbors=True,  lyambda = 1, sigma = 1)
         result_url="media/imagesresult/imgresult.jpeg"
         result_img.save(result_url)
         data.update({
