@@ -18,6 +18,9 @@ class Migration(migrations.Migration):
                 ('image', models.ImageField(upload_to='images')),
                 ('image_verify', models.ImageField(upload_to='imagesverify')),
             ],
+            options={
+                'db_table': 'image',
+            },
         ),
         migrations.CreateModel(
             name='Result',
