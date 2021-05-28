@@ -7,8 +7,9 @@ from numpy import asarray
 import itertools
 from .algorithms import graph_by_image
 from .main import algorithm
-from .models import Result
+from .models import Graph_and_pixels
 import numpy as np
+import json
 
 
 def serialize(obj):
@@ -55,15 +56,39 @@ def segmentation(request):
     if request.method == 'POST':
         object_pixels = convert_str_to_list(request.POST.get('object_pixels', ''))
         background_pixels = convert_str_to_list(request.POST.get('background_pixels', ''))
-        result_img = algorithm(img_url, img_verify_url, object_pixels, background_pixels, is_four_neighbors=True,  lyambda = 1, sigma = 1)
+        if request.POST.get('is_eight_neighbors', True)=='on':
+            is_four_neighbors = False
+        else:
+            is_four_neighbors = True
+        result_img = algorithm(img_url, img_verify_url, object_pixels, background_pixels, is_four_neighbors = is_four_neighbors,  lyambda = float(request.POST.get('lyambda', 1)), sigma = float(request.POST.get('sigma', 0.1)))
         result_url="media/imagesresult/imgresult.jpeg"
         result_img.save(result_url)
         data.update({
         'result_img': result_url,
-        })
+        }) 
+
         return mainpage(request,data)
 
     return mainpage(request)
+
+def interactive_segmentation(request):
+    data={}
+    # graph_and_pixels = Graph_and_pixels.objects.create(graph=graph, object_pixels = object_pixels, background_pixels = background_pixels, K=0.1)
+    # graph_and_pixels.save()
+     # request.session['id_graph'] = graph_and_pixels.id_graph
+    try:
+        img_url = 'media/'+request.session['image']
+        img_verify_url = 'media/'+request.session['image_verify']
+    except KeyError:
+        return mainpage(request)
+    if request.method == 'POST':
+        id_graph = request.session['id_graph']
+        graph = Graph_and_pixels.objects.filter(id_graph=id_graph).values('graph')[0].get('graph')
+        object_pixels = Graph_and_pixels.objects.filter(id_graph=id_graph).values('object_pixels')[0].get('object_pixels')
+        background_pixels = Graph_and_pixels.objects.filter(id_graph=id_graph).values('background_pixels')[0].get('background_pixels')
+        K = Graph_and_pixels.objects.filter(id_graph=id_graph).values('K')[0].get('K')
+
+
     
 
 

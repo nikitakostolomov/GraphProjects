@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial import distance
 import networkx as nx
+from .maxflow import Graph
 
 white = 255
 
@@ -175,17 +176,17 @@ def get_min_cut(graph):
     #         edges[(1, j + 2)] = graph[2][(i, j)]
     #     else:
     #         edges[(i + 2, j + 1)] = graph[2][(i, j)]
-    #
+    
     # file = open("MyFile.txt", "w")
     # file.write(f"{graph[0][0]} {graph[0][1]}\n")
     # for i, j in edges:
     #     file.write(f"{i} {j} {edges[(i, j)]}\n")
     # file.close()
-    #
+    
     # g = min_cut.Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
     # g.push_relabel_max_flow()
     # g.get_min_cut()
-    #
+    
     # print("========min_cut_obj_unfixed=========")
     # print(g.min_cut_object)
     # print("========min_cut_bg_unfixed=========")

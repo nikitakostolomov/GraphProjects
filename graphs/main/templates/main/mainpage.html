@@ -21,14 +21,23 @@
             {% csrf_token %}
             <input class="hidden" id="object_pixels" name="object_pixels" value="">
             <input class="hidden" id="background_pixels" name="background_pixels" value="">
+            <input class="input_data" type="number" step="0.01" id="lyamda" name="lyamda" value=""  placeholder="Лямбда">
+            <input class="input_data" type="number"  step="0.01" id="sigma" name="sigma" value="" placeholder="Сигма">
+            <label class="switch inline">
+                <input id ="is_eight_neighbors" name="is_eight_neighbors" class="inline" name="lamda"  type="checkbox" onclick=changespan_is_eight_neighbors()> 
+                <span class="slider round"></span>
+            </label>
+            <span id="type_of_choose_is_neighbors">
+                Четыре соседа
+            </span>
             <input type="submit"  onclick=normalization() class ="my-button" value="Запуск алгоритма">
         </form>
             <input type="button" class ="my-button inline" value ="Сброс" onclick=dropping()>
         <label class="switch inline">
-            <input id ="type_of_pixels" class="inline" type="checkbox" onclick=changespan()> 
+            <input id ="type_of_pixels" class="inline" type="checkbox" onclick=changespan_type_of_pixels()> 
             <span class="slider round"></span>
         </label>
-        <span id="type_of_choose">
+        <span id="type_of_choose_pixels">
             Выбор пикселей объекта
         </span>
     </div>
@@ -70,10 +79,15 @@
             pixel_context.closePath();
             pixel_context.fill();   
         }
-        function changespan(){
-            if (document.getElementById('type_of_pixels').checked) document.getElementById("type_of_choose").textContent='Выбор пикселей фона';
-            else document.getElementById("type_of_choose").textContent='Выбор пикселей объекта';
+        function changespan_type_of_pixels(){
+            if (document.getElementById('type_of_pixels').checked) document.getElementById("type_of_choose_pixels").textContent='Выбор пикселей фона';
+            else document.getElementById("type_of_choose_pixels").textContent='Выбор пикселей объекта';
         };
+        function changespan_is_eight_neighbors(){
+            if (document.getElementById('is_eight_neighbors').checked) document.getElementById("type_of_choose_is_neighbors").textContent='Восемь соседей';
+            else document.getElementById("type_of_choose_is_neighbors").textContent='Четыре соседа';
+        };
+
         // Когда картинка загрузилась, масштабируем её под канвас
         image.onload=function(){
             var hRatio = canvas.width  / image.width;
