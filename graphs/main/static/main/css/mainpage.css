@@ -23,13 +23,45 @@
 .download-container {
     position:absolute;
     top:7%;
-    left: 26%;
+    left: 23%;
     
   }
 .manage-container {
     position: absolute;
     top:13%;
-    left: 35.5%;
+    left: 18.6%;
+}
+.input_data{
+  padding: 10px 5px;
+}
+
+/* КНОПКИ */
+.my-button {
+  text-decoration: none;
+  display: inline-block;
+  width: 140px;
+  height: 45px;
+  border-radius: 30px;
+  margin: 10px 20px;
+  /* font-family: 'Montserrat', sans-serif; */
+  font-size: 10px;
+  text-transform: uppercase;
+  text-align: center;
+  font-weight: 600;
+  color: #524f4e;
+  background: white;
+  box-shadow: 0 8px 15px rgba(0, 0, 0, .1);
+  transition: .3s;
+  outline: none;
+}
+.my-button:hover {
+  background: #636363;
+  box-shadow: 0 15px 20px rgba(199, 199, 199, 0.1);
+  color: white;
+}
+
+.hidden{
+  display: none;
 }
 
 /* СЛАЙДЕР */
@@ -87,31 +119,3 @@ border-radius: 34px;
 border-radius: 50%;
 }
 
-/* КНОПКИ */
-.my-button {
-    text-decoration: none;
-    display: inline-block;
-    width: 140px;
-    height: 45px;
-    border-radius: 30px;
-    margin: 10px 20px;
-    /* font-family: 'Montserrat', sans-serif; */
-    font-size: 10px;
-    text-transform: uppercase;
-    text-align: center;
-    font-weight: 600;
-    color: #524f4e;
-    background: white;
-    box-shadow: 0 8px 15px rgba(0, 0, 0, .1);
-    transition: .3s;
-    outline: none;
-  }
-  .my-button:hover {
-    background: #636363;
-    box-shadow: 0 15px 20px rgba(199, 199, 199, 0.1);
-    color: white;
-  }
-
-.hidden{
-    display: none;
-}

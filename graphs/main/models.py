@@ -14,3 +14,13 @@ class Result(models.Model):
         db_table = 'result'
 
     image_result = models.ImageField(upload_to='imagesresult')
+
+class Graph_and_pixels(models.Model):
+    id_graph = models.AutoField(primary_key=True)
+    graph = models.TextField()
+    object_pixels = models.TextField()
+    background_pixels = models.TextField()
+    K = models.FloatField()
+
+
+
