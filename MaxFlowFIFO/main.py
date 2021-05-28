@@ -54,14 +54,15 @@ class Graph:
             self.amount_of_vertex_and_edges = amount_of_vertex_and_edges
             self.edges_and_throughput = edges_and_throughput
 
-        self.start = 1
-        self.end = self.amount_of_vertex_and_edges[0]
+        self.start = 0
+        self.end = self.amount_of_vertex_and_edges[0] - 1
 
         self._source = 0
         self._sink = 0
 
-        self._vertex_and_height_excess = {}
+        self._vertex_and_height_excess = []
         self._edges_and_flow_residual_capacity = {}
+        self._vertices_info = []
 
         self._amount_of_push_and_rel = 0
         self._glob_rel_value = 1
@@ -84,9 +85,8 @@ class Graph:
             vertexes_edges = list_of_vertexes_edges[0], list_of_vertexes_edges[1]
             for line in f:
                 edge_throughput = list(map(int, line.split()))
-                edges_and_throughput[
-                    (edge_throughput[0], edge_throughput[1])
-                ] = edge_throughput[2]
+                edge = edge_throughput[0] - 1, edge_throughput[1] - 1
+                edges_and_throughput[edge] = edge_throughput[2]
 
         return vertexes_edges, edges_and_throughput
 
@@ -105,20 +105,18 @@ class Graph:
             self.amount_of_vertex_and_edges = args[1]
             self.edges_and_throughput = args[2]
 
-        for vertex in range(1, self.amount_of_vertex_and_edges[0] + 1):
-            if vertex != self.source:
-                self.vertex_and_height_excess[vertex] = [
-                    0,
-                    0,
-                ]  # для вершин, не являющихся источником, устанавливаем высоту и избыток равными нулю
-            else:
-                self.vertex_and_height_excess[vertex] = [
-                    self.amount_of_vertex_and_edges[0]
-                ]  # для вершины, являющейся источником, устанавливаем высоту равную количеству вершин
-
-        self.vertex_and_height_excess[self.source].append(
-            0
+        self.vertex_and_height_excess.append(
+            [self.amount_of_vertex_and_edges[self.source], 0]
         )  # источнику в словаре добавляем его избыток
+
+        for vertex in range(1, self.amount_of_vertex_and_edges[0]):
+
+            self.vertex_and_height_excess.append(
+                [
+                    0,
+                    0,
+                ]
+            )  # для вершин, не являющихся источником, устанавливаем высоту и избыток равными нулю
 
         for (
             edge,
@@ -159,6 +157,11 @@ class Graph:
                     1
                 ] -= throughput  # уменьшили избыток источника
 
+        for vertex in range(len(self.vertex_and_height_excess)):
+            adjacent_vertices = self.find_adjacent_vertices(vertex)
+            self.vertex_and_height_excess[vertex].append(adjacent_vertices[0])
+            self.vertex_and_height_excess[vertex].append(adjacent_vertices[1])
+
     def push(self, edge: tuple, *args) -> None:
         """
         По ребру (u,v) пропускается максимально возможный поток, то есть минимум из избытка вершины u
@@ -183,18 +186,20 @@ class Graph:
             excess, residual_capacity
         )  # находим максимальный поток, который можем пустить по ребру
 
+        reversed_edge = edge[::-1]
+
         self.edges_and_flow_residual_capacity[edge][
             0
         ] += max_flow  # увеличиваем поток ребра
         self.edges_and_flow_residual_capacity[edge][
             1
         ] -= max_flow  # уменьшаем пропускную способность ребра
-        self.edges_and_flow_residual_capacity[edge[::-1]][
+        self.edges_and_flow_residual_capacity[reversed_edge][
             0
         ] = -self.edges_and_flow_residual_capacity[edge][
             0
         ]  # уменьшаем поток обратного ребра
-        self.edges_and_flow_residual_capacity[edge[::-1]][
+        self.edges_and_flow_residual_capacity[reversed_edge][
             1
         ] += max_flow  # увеличиваем пропусную способность обратного ребра
         self.vertex_and_height_excess[edge[0]][
@@ -203,6 +208,21 @@ class Graph:
         self.vertex_and_height_excess[edge[1]][
             1
         ] += max_flow  # увеличиваем избыток у принимающей вершины
+
+        self.update_adjacent_vertices(edge)
+        self.update_adjacent_vertices(reversed_edge)
+
+    def update_adjacent_vertices(self, edge):
+        start_vertex = edge[0]
+        end_vertex = edge[1]
+
+        if self.edges_and_flow_residual_capacity[edge][1] > 0:
+            self.vertex_and_height_excess[start_vertex][2].add(end_vertex)
+            self.vertex_and_height_excess[end_vertex][3].add(start_vertex)
+
+        else:
+            self.vertex_and_height_excess[start_vertex][2].discard(end_vertex)
+            self.vertex_and_height_excess[end_vertex][3].discard(start_vertex)
 
     def relabel(self, vertex: int, *args) -> None:
         """
@@ -217,7 +237,9 @@ class Graph:
             self.edges_and_flow_residual_capacity = args[1]
 
         adjacent_vertices_and_height = {}  # словарь смежных вершин и их высот
-        adjacent_vertices = self.find_adjacent_vertices(vertex)  # нашли смежные вершины
+        adjacent_vertices = self.vertex_and_height_excess[vertex][
+            2
+        ]  # нашли смежные вершины
 
         for adj in adjacent_vertices:
             edge = (vertex, adj)
@@ -238,7 +260,7 @@ class Graph:
                 adjacent_vertices_and_height[vertex_with_min_height] + 1
             )  # поднимаем нашу вершину
 
-    def find_adjacent_vertices(self, vertex: int, *args) -> list:
+    def find_adjacent_vertices(self, vertex: int, *args) -> Tuple[set, set]:
         """
         Принимает вершину, для которой нужно найти смежные. Если вершина смежная, то добавляем вершину в список смежных
         вершин.
@@ -248,7 +270,8 @@ class Graph:
         if len(args) == 1:  # для тестов, сюда можно не смотреть
             self.edges_and_flow_residual_capacity = args[0]
 
-        adjacent_vertices = []  # пустой список смежных вершин
+        export_adjacent_vertices = set()  # пустой список смежных вершин
+        import_adjacent_vertices = set()
         for (
             edge,
             flow_and_residual_capacity,
@@ -257,11 +280,13 @@ class Graph:
                 edge[0] == vertex and flow_and_residual_capacity[1] > 0
             ):  # если первая вершина ребра сопадает с переданной вершиной и пропускная способность ребра больше нуля,
                 # то вторая вершина ребра является смежной
-                adjacent_vertices.append(edge[1])
+                export_adjacent_vertices.add(edge[1])
+            if edge[1] == vertex and flow_and_residual_capacity[1] > 0:
+                import_adjacent_vertices.add(edge[0])
 
-        return adjacent_vertices
+        return export_adjacent_vertices, import_adjacent_vertices
 
-    def push_relabel_max_flow(self, source: int = 0, sink: int = 0) -> int:
+    def push_relabel_max_flow(self, source: int = -1, sink: int = -1) -> int:
         """
         Вершины с положительным избытком обрабатываются (просматриваются) в порядке first-in, first-out.
         Вершина извлекается из списка и делаются операции push пока это возможно. Новые вершины с избытком добавляются в
@@ -274,11 +299,15 @@ class Graph:
         :param sink: сток, по умолчанию вершиной будет первое число из файла с задачей , можно выбрать другую
         :return: избыток стока
         """
-        if source == 0:
+        if source == -1:
             self.source = self.start
+        else:
+            self.source = source
 
-        if sink == 0:
+        if sink == -1:
             self.sink = self.end
+        else:
+            self.sink = sink
 
         self.glob_rel_value = self.amount_of_vertex_and_edges[
             1
@@ -290,14 +319,11 @@ class Graph:
             collections.deque()
         )  # пустая очередь вершин с положительным избытком
 
-        for (
-            vertex,
-            height_and_excess,
-        ) in (
-            self.vertex_and_height_excess.items()
+        for (vertex_number, vertex) in enumerate(
+            self.vertex_and_height_excess
         ):  # ищем вершины с положительным избытком
-            if height_and_excess[1] > 0:
-                vertices_with_excess.append(vertex)
+            if vertex[1] > 0:
+                vertices_with_excess.append(vertex_number)
 
         self.global_relabeling()  # инициализируем высоты вершин
 
@@ -307,24 +333,20 @@ class Graph:
                 vertices_with_excess.popleft()
             )  # извлекаем первый элемент
 
-            adjacent_vertices = self.find_adjacent_vertices(
+            adjacent_vertices = self.vertex_and_height_excess[
                 vertex_with_positive_excess
-            )  # находим смежные вершины
-
-            check_push = True  # если True, значит мы не выполнили push, и вершину можно будет поднять
+            ][2].copy()
 
             for vertex in adjacent_vertices:  # выполняем push пока можем
                 if self.vertex_and_height_excess[vertex_with_positive_excess][
                     1
                 ] > 0 and (
                     self.vertex_and_height_excess[vertex_with_positive_excess][0]
-                    == self.vertex_and_height_excess[vertex][0] + 1
+                    > self.vertex_and_height_excess[vertex][0]
                 ):  # push выполняем только если избыток вершины больше нуля и высота вершины больше на 1, чем у смежной
+
                     self.push(
                         (vertex_with_positive_excess, vertex),
-                    )
-                    check_push = (
-                        False  # выполнили push, поэтому поднимать вершину не будем
                     )
 
                     if (
@@ -333,16 +355,10 @@ class Graph:
                         vertices_with_excess.append(vertex)
 
             if (
+                # not was_pushed and
                 self.vertex_and_height_excess[vertex_with_positive_excess][1] > 0
                 and vertex_with_positive_excess != self.sink
-            ):  # если в вершине остался избыток, то добавляем ее в конец очереди
-                vertices_with_excess.append(vertex_with_positive_excess)
-
-            if (
-                check_push
-                and self.vertex_and_height_excess[vertex_with_positive_excess][1] > 0
-                and vertex_with_positive_excess != self.sink
-                and vertex_with_positive_excess != self.source
+                # and vertex_with_positive_excess != self.source
             ):  # relabel выполняем, если мы не сделали push, избыток вершины больше нуля и вершина не является стоком
                 self.relabel(vertex_with_positive_excess)
                 if (
@@ -350,11 +366,63 @@ class Graph:
                 ):  # если вершины еще нет в очереди, добавляем ее в конец
                     vertices_with_excess.append(vertex_with_positive_excess)
 
-            # self.try_global_relabeling()
+            self.try_global_relabeling()
 
         self.max_flow = self.vertex_and_height_excess[self.sink][1]
 
         return self.max_flow
+
+    def global_relabeling_bfs(self, source):
+        visited, queue = set(), collections.deque(
+            [source]
+        )  # посещенные вершины - множество, смежные с ними попадают
+        # в очередь
+        vertices_dist = {
+            vertex: 1_000_000 for vertex in range(self.amount_of_vertex_and_edges[0])
+        }  # словарь вершин и расстояний
+
+        vertices_dist[
+            source
+        ] = 0  # расстояние от вершины до нее самой ставим равным нулю
+
+        visited.add(source)
+
+        while queue:
+            vertex = queue.popleft()
+            neighbours = self.vertex_and_height_excess[vertex][3]
+            for neighbour in neighbours:
+                res_cap = self.edges_and_flow_residual_capacity[neighbour, vertex][1]
+                flow = self.edges_and_flow_residual_capacity[neighbour, vertex][0]
+                if (
+                    neighbour not in visited and flow < res_cap
+                ):  # если вершина еще не посещена и ребро не насыщено
+                    visited.add(neighbour)  # то вершину добавляем в посещенные
+                    vertices_dist[neighbour] = vertices_dist[vertex] + 1
+                    queue.append(neighbour)
+
+        if len(visited) == 1:
+            return False
+        else:
+            return vertices_dist
+
+    def min_cut_bfs(self):
+        visited, queue = set(), collections.deque(
+            [self.source]
+        )  # посещенные вершины - множество, смежные с ними попадают
+        # в очередь
+        visited.add(self.source)
+        while queue:
+            vertex = queue.popleft()
+            neighbours = self.vertex_and_height_excess[vertex][2]
+            for neighbour in neighbours:
+                res_cap = self.edges_and_flow_residual_capacity[vertex, neighbour][1]
+                if (
+                    neighbour not in visited and res_cap > 0
+                ):  # если вершина еще не посещена и пропускная способность ребра больше нуля
+                    visited.add(neighbour)  # то вершину добавляем в посещенные
+                    queue.append(neighbour)
+
+        return visited
 
     def bfs(self, source: int, destination: int = -1) -> int or False or set:
         """
@@ -380,7 +448,8 @@ class Graph:
 
         if bfs_with_destination:
             vertices_dist = {
-                vertex: 1_000_000 for vertex in self.vertex_and_height_excess
+                vertex: 1_000_000
+                for vertex in range(self.amount_of_vertex_and_edges[0])
             }  # словарь вершин и расстояний
 
             vertices_dist[
@@ -391,7 +460,7 @@ class Graph:
 
         while queue:
             vertex = queue.popleft()
-            neighbours = self.find_adjacent_vertices(vertex)
+            neighbours = self.vertex_and_height_excess[vertex][2]
 
             for neighbour in neighbours:
                 res_cap = self.edges_and_flow_residual_capacity[vertex, neighbour][1]
@@ -426,8 +495,8 @@ class Graph:
         с помощью bfs, все найденные вершины будут слева от разреза, остальные справа. Минимальным разрезом будет сумма
         пропускных способностей ребер, соединяющих вершины слева и справа от разреза.
         """
-        self.min_cut_object = self.bfs(
-            self.source
+        self.min_cut_object = (
+            self.min_cut_bfs()
         )  # ищем вершины, до которых можно добраться из истока
 
         # for edge in self.edges_and_throughput:
@@ -437,7 +506,7 @@ class Graph:
         #     ):
         #         self.min_cut += self.edges_and_throughput[edge]  # нахождение значения минимального разреза
 
-        for vertex in range(1, self.amount_of_vertex_and_edges[0] + 1):
+        for vertex in range(self.amount_of_vertex_and_edges[0]):
             if vertex not in self.min_cut_object:
                 self.min_cut_background.add(vertex)
 
@@ -450,16 +519,24 @@ class Graph:
         Если сток не достижим, то запускаем bfs от вершины до истока, если расстояние больше чем высота вершины, то
         высоту полагаем равной расстоянию от вершины до истока.
         """
-        for vertex in self.vertex_and_height_excess:
-            distance = self.bfs(vertex, self.sink)
-            if distance > 0 or vertex == self.sink:
-                if self.vertex_and_height_excess[vertex][0] < distance:
-                    self.vertex_and_height_excess[vertex][0] = distance
-            else:
-                distance = self.bfs(vertex, self.source)
-                if distance > 0 or vertex == self.source:
-                    if self.vertex_and_height_excess[vertex][0] < distance:
-                        self.vertex_and_height_excess[vertex][0] = distance
+        distance = self.global_relabeling_bfs(self.sink)
+        if distance is not False:
+            for vertex in distance:
+                if (
+                    self.vertex_and_height_excess[vertex][0] < distance[vertex]
+                    and vertex != self.source
+                    and distance[vertex] != 1000000
+                ):
+                    self.vertex_and_height_excess[vertex][0] = distance[vertex]
+        else:
+            distance = self.global_relabeling_bfs(self.source)
+            for vertex in distance:
+                if (
+                    self.vertex_and_height_excess[vertex][0] < distance[vertex]
+                    and vertex != self.sink
+                    and distance[vertex] != 1000000
+                ):
+                    self.vertex_and_height_excess[vertex][0] = distance[vertex]
 
     def try_global_relabeling(self) -> None:
         """
@@ -477,6 +554,14 @@ class Graph:
             print("Значения минимального разреза и максимального потока равны")
         else:
             print("Значения минимального разреза и максимального потока не равны")
+
+    def get_edges_and_res_cap_dict(self):
+        edges_and_res_cap = {}
+        for edge, flow_res_cap in self.edges_and_flow_residual_capacity.items():
+            if flow_res_cap[1] > 0:
+                edges_and_res_cap[edge] = flow_res_cap[1]
+
+        return edges_and_res_cap
 
     @property
     def source(self):
@@ -580,6 +665,14 @@ class Graph:
         """Setter для вершин справа от разреза"""
         self._min_cut_background = min_cut_background
 
+    @property
+    def vertices_info(self):
+        return self._vertices_info
+
+    @vertices_info.setter
+    def vertices_info(self, vertices_info):
+        self._vertices_info = vertices_info
+
 
 def read_files_and_find_max_flow(directory):
     files = os.listdir(directory)
@@ -604,8 +697,7 @@ if __name__ == "__main__":
     # )  # для работы с директорией, в которой находятся тесты
 
     g = Graph(
-        path="MaxFlow-tests/test_4.txt"
+        path="MaxFlow-tests/test_rd04.txt"
     )  # для работы с конкретным файлом, лучше указывать полный путь
-    g.push_relabel_max_flow()
-    g.get_min_cut()
-    print(g.max_flow, g.min_cut_object, g.min_cut_background)
+    print(g.push_relabel_max_flow())
+    print(g.get_min_cut())
