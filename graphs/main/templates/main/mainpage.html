@@ -4,20 +4,24 @@
 {% block content %}
 
 <div class="main"> 
-    <div class="container"> 
-        <form method="post" class="inline" enctype="multipart/form-data">
+    <div class="download-container"> 
+        <form method="post" enctype="multipart/form-data" action="/"> 
             {% csrf_token %}
-            <input type="hidden" class="inline" name="csrfmiddlewaretoken" value="lgEVz55fniuHAfrGsaiiakAzGlueFqlee2CG3Zqdh0Ay2dR8X37uAIwmOl21OA6K">
-            <input type="file" class="inline" name="image" accept="image/*" required id="id_image">
+            <label for="id_image">Изображение:</label> <input type="file"  class="inline" name="image" accept="image/*" required id="id_image">
+            <label for="id_image_verify">Изображение для проверки:</label> <input type="file"  class="inline" name="image_verify" accept="image/*" required id="id_image_verify">
+            <input type="hidden" name="csrfmiddlewaretoken" value="kuQG8BVlvk3APpviEN774owX9recTku9dgOrCvgjp29rhnVK9GWjuMsKhrMZ2ufF">
             <button type="submit" class ="my-button inline"> Загрузить изображение </button>
         </form> 
+    </div>
+
+    <div class="manage-container"> 
         <!-- Если изображение уже загружено -->
         {% if is_download_img %}
         <form action="segmentation" method="post" class="inline">
             {% csrf_token %}
             <input class="hidden" id="object_pixels" name="object_pixels" value="">
             <input class="hidden" id="background_pixels" name="background_pixels" value="">
-            <input type="submit"  class ="my-button" value="Запуск алгоритма">
+            <input type="submit"  onclick=normalization() class ="my-button" value="Запуск алгоритма">
         </form>
             <input type="button" class ="my-button inline" value ="Сброс" onclick=dropping()>
         <label class="switch inline">
@@ -28,6 +32,7 @@
             Выбор пикселей объекта
         </span>
     </div>
+    
     <div class="screen">
             <canvas id=canvas width=600vmax height=600vmax></canvas>
             <canvas id=pixel_canvas></canvas>
@@ -52,6 +57,7 @@
         var is_background;
         var result = document.getElementById("result_canvas");
         var result_context = result.getContext("2d");
+        var ratio;
         const red='rgba(255,0,0,0.3)';
         const green='rgba(0,255,0,0.3)';
         const screenWidth = window.screen.width
@@ -70,9 +76,9 @@
         };
         // Когда картинка загрузилась, масштабируем её под канвас
         image.onload=function(){
-            var hRatio = canvas.width  / image.width    ;
-            var vRatio =  canvas.height / image.height  ;
-            var ratio  = Math.min ( hRatio, vRatio );
+            var hRatio = canvas.width  / image.width;
+            var vRatio =  canvas.height / image.height;
+            ratio  = Math.min ( hRatio, vRatio );
             width = image.width*ratio;
             height = image.height*ratio;
             context.clearRect(0,0,canvas.width, canvas.height);
@@ -83,17 +89,24 @@
             context.drawImage(image, 0,0, width, height); 
 
             // Окно результата
+            if ('{{ result_img }}'== 'media/imagesresult/imgresult.jpeg'){
+                var image_result=new Image();
+                image_result.src='{{ result_img }}';
+                image_result.onload=function(){    
+                    result_context.drawImage(image_result, 0,0, width, height); 
+                    result_context.fill();
+                }
+            }
             result.width = width;
             result.height = height;
-            result_context.fill();
         } 
 
              
         // При нажатии на холст рисуем кружочки
         pixel_canvas.onclick=function(e){
             if (document.getElementById('type_of_pixels').checked){
-                choose_pixel(e,background_pixels,green);
-                document.getElementById('background_pixels').value=background_pixels;
+                choose_pixel(e,background_pixels,green);            
+               document.getElementById('background_pixels').value=background_pixels;
             }
             else {
                 choose_pixel(e,object_pixels,red);
@@ -114,7 +127,7 @@
             }
             //Если нажал внутрь существующего кружочка, удаляем его
             for (let i = 0; i < pixels.length ; i++){
-                if (Math.sqrt(Math.pow(x-pixels[i][0], 2)+Math.pow(y-pixels[i][1], 2))<=radius){
+                if (Math.sqrt(Math.pow(x-pixels[i][0]*ratio, 2)+Math.pow(y-pixels[i][1]*ratio, 2))<=radius){
                     pixel_context.clearRect(0,0,canvas.width, canvas.height);
                     pixels[i] = pixels[pixels.length - 1];
                     pixels.length--;
@@ -123,26 +136,27 @@
                 }
             };
             if(pushable){
-                pixels.push([x,y]);
+                pixels.push([Math.round(x/ratio),Math.round(y/ratio)]);
                 circle(x,y,radius,color);
             }
             else {
                 for (let i = 0; i < object_pixels.length ; i++){
-                    circle(object_pixels[i][0],object_pixels[i][1],radius,red);
+                    circle(ratio*object_pixels[i][0],ratio*object_pixels[i][1],radius,red);
                 };  
                 for (let i = 0; i < background_pixels.length ; i++){
-                    circle(background_pixels[i][0],background_pixels[i][1],radius,green);
+                    circle(ratio*background_pixels[i][0],ratio*background_pixels[i][1],radius,green);
                 };  
 
             }   
         };
         function dropping(){
             pixel_context.clearRect(0,0,canvas.width, canvas.height);
+            document.getElementById('object_pixels').value=' ';
+            document.getElementById('background_pixels').value=' ';
             object_pixels=[]; 
             background_pixels=[];
-
-
         }
     </script>
+
 {% endif %}
 {% endblock %}

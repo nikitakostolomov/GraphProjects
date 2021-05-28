@@ -1,5 +1,5 @@
 *{
-    font-family: 'Kaushan Script';
+  font-family: 'Kaushan Script';
     letter-spacing: 1px;
 }
 #canvas, #pixel_canvas{
@@ -20,11 +20,17 @@
     vertical-align: middle;
 }
 
-.container {
+.download-container {
     position:absolute;
-    top:12%;
-    left: 24%;
+    top:7%;
+    left: 26%;
+    
   }
+.manage-container {
+    position: absolute;
+    top:13%;
+    left: 35.5%;
+}
 
 /* СЛАЙДЕР */
 .switch {
@@ -98,6 +104,7 @@ border-radius: 50%;
     background: white;
     box-shadow: 0 8px 15px rgba(0, 0, 0, .1);
     transition: .3s;
+    outline: none;
   }
   .my-button:hover {
     background: #636363;
