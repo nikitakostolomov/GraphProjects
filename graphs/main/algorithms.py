@@ -309,7 +309,8 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # print()
 
     # 3. get min cut for graph
-    (obj, bg), graph_to_save = get_min_cut(graph)
+    # (obj, bg), graph_to_save = get_min_cut(graph)
+    obj, bg = standard_get_min_cut(graph)
     print("Cut was got")
     # print(obj)
     # print(bg)
@@ -323,7 +324,8 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # 5. get metrics
     tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
-    return graph_to_save, k, jpg, tfm, tsm
+    # return graph_to_save, k, jpg, tfm, tsm
+    return jpg
 
 
 def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k):
