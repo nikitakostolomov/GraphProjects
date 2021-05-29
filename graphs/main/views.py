@@ -57,8 +57,9 @@ def segmentation(request):
         else:
             is_four_neighbors = True
         result_img = start_algorithm(img_url, img_verify_url, object_pixels, background_pixels,
-                                     is_four_neighbors=is_four_neighbors, lyambda=float(request.POST.get('lyambda', 1)),
-                                     sigma=float(request.POST.get('sigma', 0.1)))
+                                     is_four_neighbors=is_four_neighbors,
+                                     lyambda=float(request.POST.get('lyambda', '1') if request.POST.get('lyambda', '') != '' else '1'),
+                                     sigma=float(request.POST.get('sigma', '0.1') if request.POST.get('sigma', '') != '' else '0.1'))
         result_url = "media/imagesresult/imgresult.jpeg"
         result_img.save(result_url)
         data.update({

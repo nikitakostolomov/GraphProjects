@@ -141,3 +141,4 @@ cython_debug/
 **.jpeg
 **.jpg
 **.bmp
+graphs/MyFile.txt
