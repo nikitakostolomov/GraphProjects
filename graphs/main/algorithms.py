@@ -190,6 +190,22 @@ def graph_to_txt(edges, n, k):
     file.close()
 
 
+def graph_to_string(edges, n, k):
+    result = f"{n} {k}"
+    for i, j in edges:
+        result += f" {i} {j} {edges[(i, j)]}"
+    return result
+
+
+def string_to_graph(string):
+    split_string = string.split(' ')
+    sizes = (split_string[0], split_string[1])
+    edges = dict()
+    for i in range(2, 3 * sizes[1] + 2, 3):
+        edges[(string[i], string[i + 1])] = string[i + 2]
+    return sizes, edges
+
+
 def convert_answer_back(obj, bg, n):
     ans_obj = []
     for i in obj:
@@ -224,7 +240,9 @@ def get_min_cut(graph):
     g.push_relabel_max_flow()
     g.get_min_cut()
 
-    return convert_answer_back(g.min_cut_object, g.min_cut_background, graph[0][0]), g
+    graph_to_save = (g.amount_of_vertex_and_edges, g.get_edges_and_res_cap_dict())
+
+    return convert_answer_back(g.min_cut_object, g.min_cut_background, graph[0][0]), graph_to_save
 
 
 def get_metrics(img, verifier):
@@ -309,8 +327,8 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # print()
 
     # 3. get min cut for graph
-    # (obj, bg), graph_to_save = get_min_cut(graph)
-    obj, bg = standard_get_min_cut(graph)
+    (obj, bg), graph_to_save = get_min_cut(graph)
+    # obj, bg = standard_get_min_cut(graph)
     print("Cut was got")
     # print(obj)
     # print(bg)
@@ -324,8 +342,8 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # 5. get metrics
     tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
-    # return graph_to_save, k, jpg, tfm, tsm
-    return jpg
+    return graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1]), k, jpg, tfm, tsm
+    # return jpg
 
 
 def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k):
