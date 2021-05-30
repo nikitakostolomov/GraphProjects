@@ -103,7 +103,7 @@ def get_hist(image, pixels, hist_range):
     hist = np.histogram([0], 1, hist_range, density=True)
     if pixels:
         intensity_list = [image[i][j] for i, j in pixels]
-        bins_number = len(intensity_list) if len(intensity_list) <= 255 else 255
+        bins_number = (len(intensity_list) + 1) if len(intensity_list) <= 255 else 255
         hist = np.histogram(intensity_list, bins_number, hist_range, density=True)
     return hist
 
@@ -113,36 +113,68 @@ def get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma):
     n = image.shape[1]
     n_links = graph[1]
     t_links = graph[2]
+
+    exps = dict()
+    sqrt2 = np.sqrt(2)
+    sigma_coefficient = 2 * pow(sigma, 2)
+
     sum_of_bpq = dict()
     for p, q in list(n_links.keys()):
-        ip = image[p // n][p % n]
-        iq = image[q // n][q % n]
-        dist = distance.euclidean((p // n, p % n), (q // n, q % n))
-        n_links[(p, q)] = 1 if ip <= iq else np.exp(-pow((ip - iq), 2) / (2 * pow(sigma, 2))) / dist
-        sum_of_bpq[p] = sum_of_bpq.get(p, 0) + n_links[(p, q)]
-    k = 1 + sum_of_bpq[max(sum_of_bpq, key=lambda i: sum_of_bpq[i])]
+        p_div = p // n
+        p_mod = p % n
+        q_div = q // n
+        q_mod = q % n
+
+        ip = image[p_div][p_mod]
+        iq = image[q_div][q_mod]
+
+        intensity_diff = ip - iq
+        if intensity_diff < 0:
+            intensity_diff = -intensity_diff
+        if intensity_diff not in exps:
+            exps[intensity_diff] = np.exp(-pow(intensity_diff, 2) / sigma_coefficient)
+
+        dist = sqrt2
+        diff = p - q
+        if diff == n or diff == -1 or diff == -n or diff == 1:
+            dist = 1
+
+        if exps[intensity_diff] > 0.0:
+            n_links[(p, q)] = exps[intensity_diff] / dist
+            sum_of_bpq[p] = sum_of_bpq.get(p, 0) + n_links[(p, q)]
+        else:
+            del n_links[(p, q)]
+    k = 1.0 + max(sum_of_bpq.values())
     # print(k)
     hist_range = (0, 256)
 
     obj_hist = get_hist(image, obj_pixels, hist_range)
     bg_hist = get_hist(image, bg_pixels, hist_range)
 
+    pr_obj_save = dict()
+    pr_bg_save = dict()
     # print(obj_pixels)
     # print(bg_pixels)
     for p in range(m * n):
         if (p // n, p % n) in obj_pixels:
             # print(f"{p} in obj_pixels")
             t_links[(m * n, p)] = k
-            t_links[(p, m * n + 1)] = 0
+            del t_links[(p, m * n + 1)]
         elif (p // n, p % n) in bg_pixels:
             # print(f"{p} in bg_pixels")
-            t_links[(m * n, p)] = 0
             t_links[(p, m * n + 1)] = k
-        else:
+            del t_links[(m * n, p)]
+        elif lyambda != 0.0:
             # print(f"{p} not in obj_pixels and bg_pixels")
             ip = image[p // n][p % n]
-            pr_obj = obj_hist[0][binary_search(obj_hist[1], ip)]
-            pr_bg = bg_hist[0][binary_search(bg_hist[1], ip)]
+
+            if ip not in pr_obj_save:
+                pr_obj_save[ip] = obj_hist[0][binary_search(obj_hist[1], ip)]
+            if ip not in pr_bg_save:
+                pr_bg_save[ip] = bg_hist[0][binary_search(bg_hist[1], ip)]
+
+            pr_obj = pr_obj_save[ip]
+            pr_bg = pr_bg_save[ip]
 
             pr_obj = pr_obj / (pr_obj + pr_bg)
             pr_bg = 1.0 - pr_obj
@@ -150,8 +182,19 @@ def get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma):
             r_bg = -np.log(pr_bg)
             # print(p, pr_obj, pr_bg, r_obj, r_bg)
 
-            t_links[(m * n, p)] = lyambda * r_bg
-            t_links[(p, m * n + 1)] = lyambda * r_obj
+            if r_bg != 0.0:
+                t_links[(m * n, p)] = lyambda * r_bg
+            else:
+                del t_links[(m * n, p)]
+            if r_obj != 0.0:
+                t_links[(p, m * n + 1)] = lyambda * r_obj
+            else:
+                del t_links[(p, m * n + 1)]
+        else:
+            del t_links[(m * n, p)]
+            del t_links[(p, m * n + 1)]
+
+    graph = ((graph[0][0], len(graph[1]) + len(graph[2])), n_links, t_links)
     return k
 
 
@@ -169,19 +212,6 @@ def get_splitting(m, n, obj):
     return img.astype(np.uint8)
 
 
-def convert_graph(graph):
-    edges = {}
-    for i, j in graph[1]:
-        edges[(i + 2, j + 2)] = graph[1][(i, j)]
-    for i, j in graph[2]:
-        if i == graph[0][0] - 2:
-            edges[(1, j + 2)] = graph[2][(i, j)]
-        else:
-            edges[(i + 2, j + 1)] = graph[2][(i, j)]
-
-    return edges
-
-
 def graph_to_txt(edges, n, k):
     file = open("MyFile.txt", "w")
     file.write(f"{n} {k}\n")
@@ -191,7 +221,7 @@ def graph_to_txt(edges, n, k):
 
 
 def graph_to_string(edges, n, k):
-    result = f"{n} {k}"
+    result = f"{n} {len(edges)}"
     for i, j in edges:
         result += f" {i} {j} {edges[(i, j)]}"
     return result
@@ -199,22 +229,37 @@ def graph_to_string(edges, n, k):
 
 def string_to_graph(string):
     split_string = string.split(' ')
-    sizes = (split_string[0], split_string[1])
+    sizes = (int(split_string[0]), int(split_string[1]))
     edges = dict()
-    for i in range(2, 3 * sizes[1] + 2, 3):
-        edges[(string[i], string[i + 1])] = string[i + 2]
+    print(sizes)
+    for i in range(0, sizes[1]):
+        print(i, split_string[2 + 3 * i], split_string[2 + 3 * i + 1], split_string[2 + 3 * i + 2])
+        edges[(int(split_string[2 + 3 * i]), int(split_string[2 + 3 * i + 1]))] = float(split_string[2 + 3 * i + 2])
     return sizes, edges
+
+
+def convert_graph(graph):
+    edges = {}
+    for i, j in graph[1]:
+        edges[(i + 1, j + 1)] = graph[1][(i, j)]
+    for i, j in graph[2]:
+        if i == graph[0][0] - 2:
+            edges[(0, j + 1)] = graph[2][(i, j)]
+        else:
+            edges[(i + 1, j)] = graph[2][(i, j)]
+
+    return edges
 
 
 def convert_answer_back(obj, bg, n):
     ans_obj = []
     for i in obj:
-        if i != 1:
-            ans_obj.append(i - 2)
+        if i != 0:
+            ans_obj.append(i - 1)
     ans_bg = []
     for i in bg:
-        if i != n:
-            ans_bg.append(i - 2)
+        if i != n - 1:
+            ans_bg.append(i - 1)
     return ans_obj, ans_bg
 
 
@@ -233,16 +278,24 @@ def standard_get_min_cut(graph):
 
 
 def get_min_cut(graph):
-    edges = convert_graph(graph)
-    # graph_to_txt(edges, graph[0][0], graph[0][1])
+    # edges = convert_graph(graph)
+    edges = {}
+    for i, j in graph[1]:
+        edges[(i, j)] = graph[1][(i, j)]
+    for i, j in graph[2]:
+        edges[(i, j)] = graph[2][(i, j)]
+    # edges = graph[1]
+    # print(graph)
+    graph_to_txt(edges, graph[0][0], graph[0][1])
 
     g = min_cut(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
-    g.push_relabel_max_flow()
+    print(f"Max flow: {g.push_relabel_max_flow(graph[0][0] - 2, graph[0][0] - 1)}")
     g.get_min_cut()
 
-    graph_to_save = (g.amount_of_vertex_and_edges, g.get_edges_and_res_cap_dict())
+    # result = convert_answer_back(g.min_cut_object, g.min_cut_background, graph[0][0])
+    result = (g.min_cut_object, g.min_cut_background)
 
-    return convert_answer_back(g.min_cut_object, g.min_cut_background, graph[0][0]), graph_to_save
+    return result, g.get_edges_and_res_cap_dict()
 
 
 def get_metrics(img, verifier):
@@ -265,7 +318,11 @@ def get_metrics(img, verifier):
             if img[i][j] == verifier[i][j]:
                 counter = counter + 1
 
-    return counter / (m * n), caps / cups
+    tsm = 1
+    if cups != 0:
+        tsm = caps / cups
+
+    return counter / (m * n), tsm
 
 
 def improve_result(graph, n, pixels, k):
@@ -295,9 +352,16 @@ def improve_result(graph, n, pixels, k):
 
 
 def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_neighbors, lyambda, sigma):
-    img = Image.open(file_name).convert('L')
+    print(f"\n\n\n\n====================\nALGORITHM START\n=================\n")
+
+    img = Image.open(file_name)
+    print(f"Image mode: {img.mode}")
+    img.convert('L')
     image = np.asarray(img)
-    ver_img = Image.open(verifier_name).convert('L')
+
+    ver_img = Image.open(verifier_name)
+    print(f"Verifier mode: {ver_img.mode}")
+    ver_img.convert('L')
     verifier = np.asarray(ver_img)
 
     print(f"Object pixels are: ")
@@ -305,8 +369,14 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     print(f"Background pixels are: ")
     print(bg_pixels)
     print(f"Lambda={lyambda}, Sigma={sigma}")
+
+    # print(file_name, verifier_name)
+
+    # print(f"seventh row of image: {image[7]}")
+    # print(f"seventh row of verifier: {verifier[7]}")
+
     # print(image[0][0])
-    # print(verifier[0][0])
+    # print(verifier[7][7])
 
     # 0. preparatory stage
     m = image.shape[0]
@@ -328,10 +398,10 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
 
     # 3. get min cut for graph
     (obj, bg), graph_to_save = get_min_cut(graph)
-    # obj, bg = standard_get_min_cut(graph)
-    print("Cut was got")
-    # print(obj)
-    # print(bg)
+    # obj1, bg1 = standard_get_min_cut(graph)
+
+    # print(f"Nikita's obj: {obj}")
+    # print(f"Standard's obj: {obj1}")
 
     # 4. get image by min cut
     img = get_splitting(m, n, obj)
@@ -342,8 +412,15 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # 5. get metrics
     tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
-    return graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1]), k, jpg, tfm, tsm
-    # return jpg
+
+    return jpg
+
+    # print(f"Graph to save: {graph_to_save}")
+    # graph_string = graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1])
+    # print(f"Got string: {graph_string}")
+    # graph_from_string = string_to_graph(graph_string)
+    # print(f"Got graph back: {graph_from_string}")
+    # return graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1]), k, jpg, tfm, tsm
 
 
 def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k):
@@ -373,4 +450,4 @@ def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pix
     # 3. get metrics
     tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
-    return graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1]), jpg, tfm, tsm
+    return graph_to_save, jpg, tfm, tsm

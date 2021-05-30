@@ -138,3 +138,7 @@ dmypy.json
 cython_debug/
 
 .idea/
+**.jpeg
+**.jpg
+**.bmp
+graphs/MyFile.txt

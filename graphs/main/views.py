@@ -103,6 +103,7 @@ def segmentation(request):
 
     return mainpage(request)
 
+
 def interactive_segmentation(request):
     data = {}
     try:
