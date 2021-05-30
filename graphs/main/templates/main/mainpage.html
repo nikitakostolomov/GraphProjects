@@ -9,7 +9,6 @@
             {% csrf_token %}
             <label for="id_image">Изображение:</label> <input type="file"  class="inline" name="image" accept="image/*" required id="id_image">
             <label for="id_image_verify">Изображение для проверки:</label> <input type="file"  class="inline" name="image_verify" accept="image/*" required id="id_image_verify">
-            <input type="hidden" name="csrfmiddlewaretoken" value="kuQG8BVlvk3APpviEN774owX9recTku9dgOrCvgjp29rhnVK9GWjuMsKhrMZ2ufF">
             <button type="submit" class ="my-button inline"> Загрузить изображение </button>
         </form> 
     </div>
@@ -19,9 +18,9 @@
         {% if is_download_img %}
         <form action="segmentation" method="post" class="inline">
             {% csrf_token %}
-            <input class="hidden" id="object_pixels" name="object_pixels" value="">
-            <input class="hidden" id="background_pixels" name="background_pixels" value="">
-            <input class="input_data" type="number" step="0.01" id="lyamda" name="lyamda" value=""  placeholder="Лямбда">
+            <input class="hidden"   id="object_pixels" name="object_pixels" value="">
+            <input class="hidden"  id="background_pixels" name="background_pixels" value="">
+            <input class="input_data" type="number" step="0.01" id="lyambda" name="lyambda" value=""  placeholder="Лямбда">
             <input class="input_data" type="number"  step="0.01" id="sigma" name="sigma" value="" placeholder="Сигма">
             <label class="switch inline">
                 <input id ="is_eight_neighbors" name="is_eight_neighbors" class="inline" name="lamda"  type="checkbox" onclick=changespan_is_eight_neighbors()> 
@@ -30,55 +29,66 @@
             <span id="type_of_choose_is_neighbors">
                 Четыре соседа
             </span>
+            
+            {% if not after_first_launch %}
             <input type="submit"  onclick=normalization() class ="my-button" value="Запуск алгоритма">
+            {% endif %}
         </form>
-            <input type="button" class ="my-button inline" value ="Сброс" onclick=dropping()>
+        <form action="\" method="post" class="inline">
+            {% csrf_token %}
+            <input type="submit" class ="my-button inline" value ="Сброс" onclick=dropping()>
+        </form>
         <label class="switch inline">
             <input id ="type_of_pixels" class="inline" type="checkbox" onclick=changespan_type_of_pixels()> 
             <span class="slider round"></span>
         </label>
         <span id="type_of_choose_pixels">
-            Выбор пикселей объекта
+            Выбор пикселей объекта 
         </span>
+       
+        {% if can_be_interactive_segmentation %}
+        <form action="interactive_segmentation" method="post" class="inline">
+            {% csrf_token %}
+            <input class="hidden" id="new_object_pixels" name="new_object_pixels" value="">
+            <input class="hidden" id="new_background_pixels" name="new_background_pixels" value="">
+            <input type="submit" class ="my-button" value="Улучшить сегментацию">
+        </form>
+        {% endif %}
     </div>
     
     <div class="screen">
             <canvas id=canvas width=600vmax height=600vmax></canvas>
-            <canvas id=pixel_canvas></canvas>
+            <canvas id=pixel_canvas width="400" height="400" ></canvas>
             <canvas id=result_canvas></canvas>
     </div>
 </div>
 
+<script type="text/javascript">
+    
+    </script>
+
+
     <script>
+        var flag = false, currX = 0, currY = 0, dot_flag = false;
+        var x = "black",y = 2;
         var canvas=document.getElementById("canvas");
-        var pixel_canvas=document.getElementById("pixel_canvas");
         var context=canvas.getContext("2d");
+        var pixel_canvas=document.getElementById("pixel_canvas");
         var pixel_context=pixel_canvas.getContext("2d");
         var image=new Image();
         image.src="/media/{{ img }}";
         image.crossOrigin = 'anonymous';
-        var width;
-        var height;
-        var radius=7;
-        var pushable;
-        var object_pixels=[]; 
-        var background_pixels=[];
+        var width, height;
+        var object_pixels=[], background_pixels=[];
         var is_background;
         var result = document.getElementById("result_canvas");
         var result_context = result.getContext("2d");
-        var ratio;
-        const red='rgba(255,0,0,0.3)';
-        const green='rgba(0,255,0,0.3)';
+        var ratio,hRatio, vRatio;
+        const yellow='#fde910';
+        const violet='#a000a0';
         const screenWidth = window.screen.width
         const screenHeight = window.screen.height
         
-        function circle(x,y,radius,color){
-            pixel_context.fillStyle = color;
-            pixel_context.beginPath();
-            pixel_context.arc(x,y, radius, 0, 2 * Math.PI);
-            pixel_context.closePath();
-            pixel_context.fill();   
-        }
         function changespan_type_of_pixels(){
             if (document.getElementById('type_of_pixels').checked) document.getElementById("type_of_choose_pixels").textContent='Выбор пикселей фона';
             else document.getElementById("type_of_choose_pixels").textContent='Выбор пикселей объекта';
@@ -88,10 +98,85 @@
             else document.getElementById("type_of_choose_is_neighbors").textContent='Четыре соседа';
         };
 
+        function init() {
+                pixel_canvas.addEventListener("mousemove", function (e) {
+                    findxy('move', e)
+                }, false);
+                pixel_canvas.addEventListener("mousedown", function (e) {
+                    findxy('down', e)
+                }, false);
+                pixel_canvas.addEventListener("mouseup", function (e) {
+                    findxy('up', e)
+                }, false);
+                pixel_canvas.addEventListener("mouseout", function (e) {
+                    findxy('out', e)
+                }, false);
+            }
+        function findxy(res, e) {
+            if (res == 'down') {
+                currX = e.clientX - canvas.offsetLeft;
+                currY = e.clientY - canvas.offsetTop;
+        
+                flag = true;
+                dot_flag = true;
+                if (dot_flag) {
+                    if (is_pixels_correct(currX,currY)){
+                        if (document.getElementById('type_of_pixels').checked) {
+                            draw(currX,currY,violet,y);
+                            post(currX, currY, 'object_pixels', 'background_pixels');
+                            post(currX, currY, 'new_object_pixels', 'new_background_pixels');
+                        }
+                        else {
+                            draw(currX,currY,yellow,y);
+                            post(currX, currY, 'object_pixels', 'background_pixels');
+                            post(currX, currY, 'new_object_pixels', 'new_background_pixels');
+                        }
+                    }  
+                    dot_flag = false;
+                }
+            }
+            if (res == 'up' || res == "out") {
+                flag = false;
+            }
+            if (res == 'move') {
+                if (flag) {
+                    currX = e.clientX - canvas.offsetLeft;
+                    currY = e.clientY - canvas.offsetTop;
+                    if (is_pixels_correct(currX,currY)){
+                        if (document.getElementById('type_of_pixels').checked){
+                            draw(currX,currY,violet,y)
+                            post(currX, currY, 'object_pixels', 'background_pixels')
+                            post(currX, currY, 'new_object_pixels', 'new_background_pixels')
+                        }
+                        else{
+                            draw(currX,currY,yellow,y);
+                            post(currX, currY, 'object_pixels', 'background_pixels')
+                            post(currX, currY, 'new_object_pixels', 'new_background_pixels')
+                        }
+                    }  
+                }
+            }
+        }
+        function draw(currX,currY,color,size){
+            pixel_context.beginPath();
+            pixel_context.fillStyle = color;
+            pixel_context.arc(currX,currY, 5, 0, 2 * Math.PI);
+            pixel_context.closePath();
+            pixel_context.lineWidth = size;
+            pixel_context.fill();   
+        }
+        function post(currX, currY, id_field_object, id_field_background){
+            if (document.getElementById('type_of_pixels').checked) document.getElementById(id_field_background).value+=Math.floor(currY/ratio)+','+Math.floor(currX/ratio)+',';
+                else document.getElementById(id_field_object).value+=Math.floor(currY/ratio)+','+Math.floor(currX/ratio)+',';
+        }
+        function is_pixels_correct(currX, currY){
+            return !(currX<0 || currX>width-1 || currY>height-1 || currY<0)
+        }
+    
         // Когда картинка загрузилась, масштабируем её под канвас
         image.onload=function(){
-            var hRatio = canvas.width  / image.width;
-            var vRatio =  canvas.height / image.height;
+            hRatio = canvas.width  / image.width;
+            vRatio =  canvas.height / image.height;
             ratio  = Math.min ( hRatio, vRatio );
             width = image.width*ratio;
             height = image.height*ratio;
@@ -101,6 +186,7 @@
             pixel_canvas.width = width;
             pixel_canvas.height = height; 
             context.drawImage(image, 0,0, width, height); 
+            
 
             // Окно результата
             if ('{{ result_img }}'== 'media/imagesresult/imgresult.jpeg'){
@@ -113,20 +199,44 @@
             }
             result.width = width;
             result.height = height;
+            
+            var object_pixels_add = "{{ object_pixels }}";
+            var background_pixels_add = "{{ background_pixels }}";
+            var object_pixels_save = "{{ object_pixels }}".split(' ');
+            var background_pixels_save = "{{ background_pixels }}".split(' ');
+            if (object_pixels_add != "" || background_pixels_add!= "" ){
+                for (let i = 0; i < object_pixels_save.length-1 ; i+=2){
+                    draw(Math.round(ratio*Number(object_pixels_save[i+1])), Math.round(ratio*Number(object_pixels_save[i])),yellow,y);
+                }
+                for (let i = 0; i < background_pixels_save.length-1; i+=2){
+                    draw(Math.round(ratio*Number(background_pixels_save[i+1])), Math.round(ratio*Number(background_pixels_save[i])),violet,y)
+                }
+            }
+            init()
         } 
 
+        function init() {
+        pixel_canvas.addEventListener("mousemove", function (e) {
+            findxy('move', e)
+        }, false);
+        pixel_canvas.addEventListener("mousedown", function (e) {
+            findxy('down', e)
+        }, false);
+        pixel_canvas.addEventListener("mouseup", function (e) {
+            findxy('up', e)
+        }, false);
+        canvpixel_canvasas.addEventListener("mouseout", function (e) {
+            findxy('out', e)
+        }, false);
+    }
+    
              
         // При нажатии на холст рисуем кружочки
-        pixel_canvas.onclick=function(e){
-            if (document.getElementById('type_of_pixels').checked){
-                choose_pixel(e,background_pixels,green);            
-               document.getElementById('background_pixels').value=background_pixels;
-            }
-            else {
-                choose_pixel(e,object_pixels,red);
-                document.getElementById('object_pixels').value=object_pixels;
-            }
-        }
+        // pixel_canvas.onclick=function(e){
+        //     alert(e.clientX);
+
+
+        // }
 
         function choose_pixel(e,pixels,color){
             pushable = true;
@@ -164,13 +274,22 @@
             }   
         };
         function dropping(){
-            pixel_context.clearRect(0,0,canvas.width, canvas.height);
+            $.ajax({
+                url: 'http://127.0.0.1:8000/dropping',
+                type: 'POST',
+                headers: {
+                "X-CSRFTOKEN": "{{ csrf_token }}"
+                }
+            }).done(function(response){
+           console.log(response);});
+           pixel_context.clearRect(0,0,canvas.width, canvas.height);
             document.getElementById('object_pixels').value=' ';
             document.getElementById('background_pixels').value=' ';
             object_pixels=[]; 
             background_pixels=[];
         }
-    </script>
-
+        
+        
+</script>
 {% endif %}
 {% endblock %}
