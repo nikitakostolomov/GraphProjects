@@ -325,25 +325,25 @@ def get_metrics(img, verifier):
 
 def improve_result(graph, n, pixels, k):
     edges = graph[1]
-    s = 1
-    t = graph[0][0]
+    s = graph[0][0] - 2
+    t = graph[0][0] - 1
 
     for i, j in pixels['add']['obj']:
-        p = i * n + j + 2
+        p = i * n + j
         rp_bg = edges.get((s, p), 0)
         rp_obj = edges.get((p, t), 0)
         edges[(s, p)] = rp_bg + rp_obj + k
         edges[(p, t)] = rp_bg + rp_obj
 
     for i, j in pixels['add']['bg']:
-        p = i * n + j + 2
+        p = i * n + j
         rp_bg = edges.get((s, p), 0)
         rp_obj = edges.get((p, t), 0)
         edges[(s, p)] = rp_bg + rp_obj
         edges[(p, t)] = rp_bg + rp_obj + k
 
     g = Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
-    g.push_relabel_max_flow()
+    print(f"Max flow: {g.push_relabel_max_flow(s, t)}")
     g.get_min_cut()
 
     result = (g.min_cut_object, g.min_cut_background)
@@ -413,6 +413,8 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
 
+    print(f"\n====================\nALGORITHM END\n=================\n\n")
+
     return graph_to_string(graph_to_save[1], graph_to_save[0][0]), k, jpg, tfm, tsm
     # print(f"Graph to save: {graph_to_save}")
     # graph_string = graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1])
@@ -424,6 +426,11 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
 
 
 def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k):
+    print(f"\n\n\n\n====================\nRESULT IMPROVING START\n=================\n")
+
+    print(f"Object pixels to add: {obj_pixels_to_add}")
+    print(f"Background pixels to add: {bg_pixels_to_add}")
+
     img = Image.open(file_name).convert('L')
     image = np.asarray(img)
     ver_img = Image.open(verifier_name).convert('L')
@@ -438,6 +445,8 @@ def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pix
     pixels['add']['bg'] = bg_pixels_to_add
 
     # 1. get new weights and use them to get new min cut
+    # print(graph)
+    # graph = string_to_graph(graph)
     (obj, bg), graph_to_save = improve_result(graph, n, pixels, k)
     print("Cut was got")
 
@@ -450,4 +459,7 @@ def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pix
     # 3. get metrics
     tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
+
+    print(f"\n====================\nRESULT IMPROVING END\n=================\n\n")
+
     return graph_to_string(graph_to_save[1], graph_to_save[0][0]), jpg, tfm, tsm
