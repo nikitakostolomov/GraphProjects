@@ -1,7 +1,6 @@
 import numpy as np
-from scipy.spatial import distance
 import networkx as nx
-from .maxflow import Graph as min_cut
+from .maxflow import Graph
 from PIL import Image
 
 white = 255
@@ -194,8 +193,7 @@ def get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma):
             del t_links[(m * n, p)]
             del t_links[(p, m * n + 1)]
 
-    graph = ((graph[0][0], len(graph[1]) + len(graph[2])), n_links, t_links)
-    return k
+    return ((graph[0][0], len(graph[1]) + len(graph[2])), n_links, t_links), k
 
 
 def get_splitting(m, n, obj):
@@ -212,15 +210,15 @@ def get_splitting(m, n, obj):
     return img.astype(np.uint8)
 
 
-def graph_to_txt(edges, n, k):
+def graph_to_txt(edges, n):
     file = open("MyFile.txt", "w")
-    file.write(f"{n} {k}\n")
+    file.write(f"{n} {len(edges)}\n")
     for i, j in edges:
         file.write(f"{i} {j} {edges[(i, j)]}\n")
     file.close()
 
 
-def graph_to_string(edges, n, k):
+def graph_to_string(edges, n):
     result = f"{n} {len(edges)}"
     for i, j in edges:
         result += f" {i} {j} {edges[(i, j)]}"
@@ -264,13 +262,13 @@ def convert_answer_back(obj, bg, n):
 
 
 def standard_get_min_cut(graph):
-    G = nx.DiGraph()
+    g = nx.DiGraph()
     for i, j in graph[1]:
-        G.add_edge(i, j, capacity=graph[1][(i, j)])
+        g.add_edge(i, j, capacity=graph[1][(i, j)])
     for i, j in graph[2]:
-        G.add_edge(i, j, capacity=graph[2][(i, j)])
+        g.add_edge(i, j, capacity=graph[2][(i, j)])
 
-    cut_value, partition = nx.minimum_cut(G, graph[0][0] - 2, graph[0][0] - 1)
+    cut_value, partition = nx.minimum_cut(g, graph[0][0] - 2, graph[0][0] - 1)
     reachable, non_reachable = partition
     print(f"Cut value is {np.round(cut_value, 3)}")
 
@@ -286,9 +284,9 @@ def get_min_cut(graph):
         edges[(i, j)] = graph[2][(i, j)]
     # edges = graph[1]
     # print(graph)
-    graph_to_txt(edges, graph[0][0], graph[0][1])
+    graph_to_txt(edges, graph[0][0])
 
-    g = min_cut(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
+    g = Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
     print(f"Max flow: {g.push_relabel_max_flow(graph[0][0] - 2, graph[0][0] - 1)}")
     g.get_min_cut()
 
@@ -344,11 +342,13 @@ def improve_result(graph, n, pixels, k):
         edges[(s, p)] = rp_bg + rp_obj
         edges[(p, t)] = rp_bg + rp_obj + k
 
-    g = min_cut(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
+    g = Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
     g.push_relabel_max_flow()
     g.get_min_cut()
 
-    return convert_answer_back(g.min_cut_object, g.min_cut_background, graph[0][0]), g
+    result = (g.min_cut_object, g.min_cut_background)
+
+    return result, g.get_edges_and_res_cap_dict()
 
 
 def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_neighbors, lyambda, sigma):
@@ -390,7 +390,7 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # print()
 
     # 2. get weights for graph
-    k = get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma)
+    graph, k = get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma)
     print("Weights were got")
     # print(graph)
     # print("=============")
@@ -413,14 +413,14 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
 
-    return jpg
-
+    return graph_to_string(graph_to_save[1], graph_to_save[0][0]), k, jpg, tfm, tsm
     # print(f"Graph to save: {graph_to_save}")
     # graph_string = graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1])
     # print(f"Got string: {graph_string}")
     # graph_from_string = string_to_graph(graph_string)
     # print(f"Got graph back: {graph_from_string}")
-    # return graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1]), k, jpg, tfm, tsm
+    # return graph_to_string(graph_to_save[1], graph_to_save[0][0]), k, jpg, tfm, tsm
+    # return jpg
 
 
 def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k):
@@ -450,4 +450,4 @@ def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pix
     # 3. get metrics
     tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
-    return graph_to_save, jpg, tfm, tsm
+    return graph_to_string(graph_to_save[1], graph_to_save[0][0]), jpg, tfm, tsm
