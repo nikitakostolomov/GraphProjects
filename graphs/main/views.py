@@ -5,6 +5,7 @@ from .algorithms import start_algorithm, improve_algorithm
 from .models import Graph_and_pixels
 import json
 from PIL import Image
+import re
 
 
 def serialize(obj):
@@ -16,7 +17,9 @@ def convert_str_to_list(str):
     list_of_coords = list(str[:-1].split(","))
     for i in range(0, len(list_of_coords) - 1, 2):
         list_of_pairs.append((int(list_of_coords[i]), int(list_of_coords[i+1])))
-    return list_of_pairs
+    print(list_of_pairs)
+    print(list(set(list_of_pairs)))
+    return list(set(list_of_pairs))
 
 def list_to_str(pixels):
     pixels_in_db=""
@@ -40,6 +43,11 @@ def save_to_database(request, graph, object_pixels, background_pixels, k, tfm, t
                                     background_pixels = background_pixels, K=k, tfm = tfm, tsm=tsm)
     graph_and_pixels.save()
     request.session['id_graph'] = graph_and_pixels.id_graph
+
+def delete_gaps(pixels):
+    pixels=pixels.strip()
+    pixels = re.sub(" +", " ", pixels)
+    return pixels
         
 
 def mainpage(request, data={}):
@@ -115,7 +123,8 @@ def interactive_segmentation(request):
     if request.method == 'POST':
         object_pixels = convert_str_to_list(request.POST.get('new_object_pixels', ''))
         background_pixels = convert_str_to_list(request.POST.get('new_background_pixels', ''))
-        graph = graph_string_to_tuple(Graph_and_pixels.objects.filter(id_graph=id_graph).values('graph')[0].get('graph'))   
+        # graph = graph_string_to_tuple(Graph_and_pixels.objects.filter(id_graph=id_graph).values('graph')[0].get('graph'))   
+        graph = Graph_and_pixels.objects.filter(id_graph=id_graph).values('graph')[0].get('graph')
         k = Graph_and_pixels.objects.filter(id_graph=id_graph).values('K')[0].get('K')
 
         graph, result_img, tfm, tsm = improve_algorithm(img_url, img_verify_url, graph, object_pixels, background_pixels, k)  
@@ -123,8 +132,8 @@ def interactive_segmentation(request):
         
         object_pixels = list_to_str(object_pixels)
         background_pixels = list_to_str(background_pixels)
-        # save_to_database(request, graph,object_pixels, background_pixels, k, tfm=0, tsm=0)
-        save_to_database(request, graph,object_pixels, background_pixels, k, tfm, tsm)
+        save_to_database(request, graph,object_pixels, background_pixels, k, tfm=0, tsm=0)
+        # save_to_database(request, graph,object_pixels, background_pixels, k, tfm, tsm)
 
         id_graph = request.session['id_graph']
         object_pixels, background_pixels = '',''
@@ -136,14 +145,18 @@ def interactive_segmentation(request):
                 id_graph-=1
             except:
                 stop = False
+        object_pixels = delete_gaps(object_pixels)
+        background_pixels = delete_gaps(background_pixels)
+
         result_url = "media/imagesresult/imgresult.jpeg"
-        result_img.save(result_url)
+        # result_img.save(result_url)
+
 
         data.update({
             'after_first_launch': True,
             'can_be_interactive_segmentation': True,
-            'object_pixels': object_pixels[1:],
-            'background_pixels':background_pixels[1:],
+            'object_pixels': object_pixels,
+            'background_pixels':background_pixels,
             'result_img': result_url,
         })
 
