@@ -446,7 +446,7 @@ def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pix
 
     # 1. get new weights and use them to get new min cut
     # print(graph)
-    # graph = string_to_graph(graph)
+    graph = string_to_graph(graph)
     (obj, bg), graph_to_save = improve_result(graph, n, pixels, k)
     print("Cut was got")
 
