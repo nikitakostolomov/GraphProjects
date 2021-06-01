@@ -120,7 +120,7 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
 
     def get_hist(_blocks):
         hist = np.histogram([0], 1, hist_range, density=True)
-        if blocks:
+        if _blocks:
             intensity_list = []
             for _i, _j in _blocks:
                 block = image[_i * group_by[0]:(_i + 1) * group_by[0], _j * group_by[1]:(_j + 1) * group_by[1]]
@@ -208,15 +208,18 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
 #     return reachable, non_reachable
 
 
-def get_min_cut(graph):
+def get_min_cut(graph, need_to_print_value=True, need_to_print_edges=False):
     s = 0
     t = graph[0][0] - 1
 
     g = Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=graph[1])
-    print(f"\nMax flow: {g.push_relabel_max_flow(s, t)}\n")
+    max_flow = g.push_relabel_max_flow(s, t)
     obj, bg, cut = g.get_min_cut()
 
-    print(f"Minimal cut: {cut}\n")
+    if need_to_print_value:
+        print(f"\nMax flow: {max_flow}\n")
+    if need_to_print_edges:
+        print(f"Minimal cut: {cut}\n")
 
     return (obj, bg), g.get_edges_and_res_cap_dict()
 
@@ -286,10 +289,8 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
 
     image, verifier = open_images(file_name, verifier_name)
 
-    print(f"Object pixels are: ")
-    print(obj_pixels)
-    print(f"\nBackground pixels are: ")
-    print(bg_pixels)
+    # print(f"Object pixels are: {obj_pixels}")
+    # print(f"\nBackground pixels are: {bg_pixels}")
     print(f"\nLambda={lyambda}, Sigma={sigma}\n")
 
     # print(f"Seventh row of image: {image[61][61]};\nSeventh row of verifier: {verifier[61][61]}\n")
@@ -368,14 +369,14 @@ def improve_result(graph, n, group_by, pixels, k):
     return get_min_cut(graph)
 
 
-def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k,
-                      group_by=default_blocking):
+def start_improving(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k,
+                    group_by=default_blocking):
     print(f"\n\n\n\n====================\nRESULT IMPROVING START\n=================\n")
 
     image, verifier = open_images(file_name, verifier_name)
 
-    print(f"Object pixels to add: {obj_pixels_to_add}\n")
-    print(f"Background pixels to add: {bg_pixels_to_add}\n")
+    # print(f"Object pixels to add: {obj_pixels_to_add}\n")
+    # print(f"Background pixels to add: {bg_pixels_to_add}\n")
 
     # 0. preparatory stage
     m = image.shape[0]

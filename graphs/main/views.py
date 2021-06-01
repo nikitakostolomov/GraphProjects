@@ -4,7 +4,7 @@ import re
 
 from django.shortcuts import render
 
-from .algorithms import start_algorithm, improve_algorithm
+from .algorithms import start_algorithm, start_improving
 from .forms import ImageForm
 from .models import Graph_and_pixels
 
@@ -18,8 +18,8 @@ def convert_str_to_list(string):
     list_of_coords = list(string[:-1].split(","))
     for i in range(0, len(list_of_coords) - 1, 2):
         list_of_pairs.append((int(list_of_coords[i]), int(list_of_coords[i + 1])))
-    print(list_of_pairs)
-    print(list(set(list_of_pairs)))
+    # print(list_of_pairs)
+    # print(list(set(list_of_pairs)))
     return list(set(list_of_pairs))
 
 
@@ -55,8 +55,10 @@ def delete_gaps(pixels):
     return pixels
 
 
-def mainpage(request, data={}):
-    print(data)
+def mainpage(request, data=None):
+    # print(data)
+    if data is None:
+        data = dict()
     if request.method == 'POST':
         form = ImageForm(request.POST, request.FILES)
         if form.is_valid():
@@ -132,12 +134,13 @@ def interactive_segmentation(request):
     if request.method == 'POST':
         object_pixels = convert_str_to_list(request.POST.get('new_object_pixels', ''))
         background_pixels = convert_str_to_list(request.POST.get('new_background_pixels', ''))
-        # graph = graph_string_to_tuple(Graph_and_pixels.objects.filter(id_graph=id_graph).values('graph')[0].get('graph'))
+        # graph = graph_string_to_tuple(Graph_and_pixels.objects.filter(id_graph=id_graph).values('graph')[0].get(
+        # 'graph'))
         graph = Graph_and_pixels.objects.filter(id_graph=id_graph).values('graph')[0].get('graph')
         k = Graph_and_pixels.objects.filter(id_graph=id_graph).values('K')[0].get('K')
 
-        graph, result_img, tfm, tsm = improve_algorithm(img_url, img_verify_url, graph, object_pixels,
-                                                        background_pixels, k)
+        graph, result_img, tfm, tsm = start_improving(img_url, img_verify_url, graph, object_pixels,
+                                                      background_pixels, k)
         # graph = '3 2 1 2 4 2 3 5'
 
         object_pixels = list_to_str(object_pixels)
