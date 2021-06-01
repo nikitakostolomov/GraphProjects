@@ -3,16 +3,20 @@ import numpy as np
 from .maxflow import Graph
 from PIL import Image
 import uuid
+from math import ceil
 
 white = 255
+default_blocking = (6, 6)
 
 
-def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors=True):
+def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors, group_by, precision):
     m = image.shape[0]
     n = image.shape[1]
 
-    precision = 4
     multiplier = pow(10, precision)
+
+    ceil_m = int(ceil(m / group_by[0]))
+    ceil_n = int(ceil(n / group_by[1]))
 
     edges = dict()
 
@@ -24,7 +28,8 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
     sigma_coefficient = 2 * pow(sigma, 2)
 
     exps = dict()
-    sum_of_bpq = np.zeros(m * n, dtype=int)
+    v = ceil_m * ceil_n + 2
+    sum_of_bpq = np.zeros(v - 2, dtype=int)
 
     # compute weight to n_link
     def n_link_w(intensity_diff, dist):
@@ -33,58 +38,62 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
         return exps[intensity_diff] / dist
 
     # absolute of difference
-    def diff_abs(x, y):
-        if x >= y:
-            return x - y
+    def diff_abs(_x, _y):
+        if _x >= _y:
+            return _x - _y
         else:
-            return y - x
+            return _y - _x
 
-    for i in range(m):
-        for j in range(n):
-            right = j < n - 1
+    def block_intensity(_i, _j):
+        block = image[_i * group_by[0]:(_i + 1) * group_by[0], _j * group_by[1]:(_j + 1) * group_by[1]]
+        return int(np.round(block.mean()))
+
+    for i in range(ceil_m):
+        for j in range(ceil_n):
+            right = j < ceil_n - 1
             up = i > 0
             left = j > 0
-            down = i < m - 1
+            down = i < ceil_m - 1
 
             w = [0, 0, 0, 0, 0, 0, 0, 0]  # right, right_up, ..., down, right_down
 
-            w[0] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i][j + 1]), 1.0),
+            w[0] = int(multiplier * round(n_link_w(diff_abs(block_intensity(i, j), block_intensity(i, j + 1)), 1.0),
                                           precision)) if right else 0
-            w[2] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i - 1][j]), 1.0),
+            w[2] = int(multiplier * round(n_link_w(diff_abs(block_intensity(i, j), block_intensity(i - 1, j)), 1.0),
                                           precision)) if up else 0
-            w[4] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i][j - 1]), 1.0),
+            w[4] = int(multiplier * round(n_link_w(diff_abs(block_intensity(i, j), block_intensity(i, j - 1)), 1.0),
                                           precision)) if left else 0
-            w[6] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i + 1][j]), 1.0),
+            w[6] = int(multiplier * round(n_link_w(diff_abs(block_intensity(i, j), block_intensity(i + 1, j)), 1.0),
                                           precision)) if down else 0
 
             if not is_four_neighbors:
-                w[1] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i - 1][j + 1]), sqrt2),
-                                              precision)) if right and up else 0
-                w[3] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i - 1][j - 1]), sqrt2),
-                                              precision)) if left and up else 0
-                w[5] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i + 1][j - 1]), sqrt2),
-                                              precision)) if left and down else 0
-                w[7] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i + 1][j + 1]), sqrt2),
-                                              precision)) if right and down else 0
+                w[1] = int(multiplier * round(n_link_w(diff_abs(block_intensity(i, j), block_intensity(i - 1, j + 1)),
+                                                       sqrt2), precision)) if right and up else 0
+                w[3] = int(multiplier * round(n_link_w(diff_abs(block_intensity(i, j), block_intensity(i - 1, j - 1)),
+                                                       sqrt2), precision)) if left and up else 0
+                w[5] = int(multiplier * round(n_link_w(diff_abs(block_intensity(i, j), block_intensity(i + 1, j - 1)),
+                                                       sqrt2), precision)) if left and down else 0
+                w[7] = int(multiplier * round(n_link_w(diff_abs(block_intensity(i, j), block_intensity(i + 1, j + 1)),
+                                                       sqrt2), precision)) if right and down else 0
 
-            u = i * n + j + 1
+            u = i * ceil_n + j + 1
             sum_of_bpq[u - 1] = sum_of_bpq[u - 1] + sum(w)
             if w[0] > 0:
                 edges[(u, u + 1)] = w[0]
             if w[1] > 0:
-                edges[(u - n, u + 1)] = w[1]
+                edges[(u - ceil_n, u + 1)] = w[1]
             if w[2] > 0:
-                edges[(u - n, u)] = w[2]
+                edges[(u - ceil_n, u)] = w[2]
             if w[3] > 0:
-                edges[(u - n, u - 1)] = w[3]
+                edges[(u - ceil_n, u - 1)] = w[3]
             if w[4] > 0:
                 edges[(u, u - 1)] = w[4]
             if w[5] > 0:
-                edges[(u + n, u - 1)] = w[5]
+                edges[(u + ceil_n, u - 1)] = w[5]
             if w[6] > 0:
-                edges[(u + n, u)] = w[6]
+                edges[(u + ceil_n, u)] = w[6]
             if w[7] > 0:
-                edges[(u + n, u + 1)] = w[7]
+                edges[(u + ceil_n, u + 1)] = w[7]
 
     k = 1 + max(sum_of_bpq)
 
@@ -95,7 +104,7 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
     replace_inf = 1000.0
     hist_range = (0, 256)
     s = 0
-    t = m * n + 1
+    t = v - 1
 
     def binary_search(arr, el, start=0, end=None):
         if end is None:
@@ -109,29 +118,49 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
         else:
             return binary_search(arr, el, start + (end - start) // 2, end)
 
-    def get_hist(pixels):
+    def get_hist(_blocks):
         hist = np.histogram([0], 1, hist_range, density=True)
-        if pixels:
-            intensity_list = [image[_i][_j] for _i, _j in pixels]
+        if blocks:
+            intensity_list = []
+            for _i, _j in _blocks:
+                block = image[_i * group_by[0]:(_i + 1) * group_by[0], _j * group_by[1]:(_j + 1) * group_by[1]]
+                intensity_list.extend(np.reshape(block, block.size))
             bins_number = (len(intensity_list) + 1) if len(intensity_list) <= 255 else 255
             hist = np.histogram(intensity_list, bins_number, hist_range, density=True)
         return hist
 
-    obj_hist = get_hist(obj_pixels)
-    bg_hist = get_hist(bg_pixels)
+    blocks = dict()
+    obj_blocks = []
+    bg_blocks = []
+
+    for i, j in obj_pixels:
+        u = (i // group_by[0], j // group_by[1])
+        blocks[u] = blocks.get(u, 0) + 1
+    for i, j in bg_pixels:
+        u = (i // group_by[0], j // group_by[1])
+        blocks[u] = blocks.get(u, 0) - 1
+
+    for x in blocks:
+        if blocks[x] > 0:
+            obj_blocks.append(x)
+        elif blocks[x] < 0:
+            bg_blocks.append(x)
+
+    obj_hist = get_hist(obj_blocks)
+    bg_hist = get_hist(bg_blocks)
 
     pr_obj_save = dict()
     pr_bg_save = dict()
 
-    for i in range(m):
-        for j in range(n):
-            p = i * n + j + 1
-            if (i, j) in obj_pixels:
-                edges[(s, p)] = k
-            elif (i, j) in bg_pixels:
-                edges[(p, t)] = k
+    for i in range(ceil_m):
+        for j in range(ceil_n):
+            p = i * ceil_n + j + 1
+            if (i, j) in obj_blocks:
+                edges[(s, p)] = int(round(k))
+            elif (i, j) in bg_blocks:
+                edges[(p, t)] = int(round(k))
             elif lyambda != 0.0:
-                ip = image[i][j]
+                ip = block_intensity(i, j)
 
                 if ip not in pr_obj_save:
                     pr_obj_save[ip] = obj_hist[0][binary_search(obj_hist[1], ip)]
@@ -162,7 +191,7 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
                 if r_obj != 0.0:
                     edges[(p, t)] = int(multiplier * round(lyambda * r_obj, precision))
 
-    return ((m * n + 2, len(edges)), edges), k
+    return ((v, len(edges)), edges), k
 
 
 # def standard_get_min_cut(graph):
@@ -192,15 +221,20 @@ def get_min_cut(graph):
     return (obj, bg), g.get_edges_and_res_cap_dict()
 
 
-def get_splitting(m, n, obj):
+def get_splitting(m, n, obj, group_by):
+    ceil_m = int(ceil(m / group_by[0]))
+    ceil_n = int(ceil(n / group_by[1]))
+    v = ceil_m * ceil_n
     s = 0
-    t = m * n + 1
+    t = v - 1
 
     img = np.zeros((m, n), dtype=np.uint8)
 
     for p in obj:
         if p != s and p != t:
-            img[(p - 1) // n][(p - 1) % n] = white
+            i = (p - 1) // ceil_n
+            j = (p - 1) % ceil_n
+            img[i * group_by[0]:(i + 1) * group_by[0], j * group_by[1]:(j + 1) * group_by[1]] = white
     return img
 
 
@@ -246,7 +280,8 @@ def open_images(file_name, verifier_name, needed_to_print=True):
     return image, verifier
 
 
-def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_neighbors, lyambda, sigma):
+def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_neighbors, lyambda, sigma,
+                    group_by=default_blocking, precision=3):
     print(f"\n\n\n\n====================\nALGORITHM START\n=================\n")
 
     image, verifier = open_images(file_name, verifier_name)
@@ -257,15 +292,15 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     print(bg_pixels)
     print(f"\nLambda={lyambda}, Sigma={sigma}\n")
 
-    # print(f"Seventh row of image: {image[7]};\nSeventh row of verifier: {verifier[7]}\n")
-    # print(f"{image[0][0]} {verifier[7][7]}\n")
+    # print(f"Seventh row of image: {image[61][61]};\nSeventh row of verifier: {verifier[61][61]}\n")
+    # print(f"{image[181][301]} {image[301][301]}\n")
 
     # 0. preparatory stage
     m = image.shape[0]
     n = image.shape[1]
 
     # 1. build graph by image
-    graph, k = graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors)
+    graph, k = graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors, group_by, precision)
     print("Graph was created\n")
     # print(graph)
     # print("=================")
@@ -284,7 +319,7 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # print(f"Standard's obj: {obj1}")
 
     # 3. get image by min cut
-    result = get_splitting(m, n, obj)
+    result = get_splitting(m, n, obj, group_by)
     result_pic = Image.fromarray(result)
     print("Splitting was got\n")
 
@@ -304,34 +339,37 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # return jpg
 
 
-def improve_result(graph, n, pixels, k):
+def improve_result(graph, n, group_by, pixels, k):
     edges = graph[1]
+
+    ceil_n = int(ceil(n / group_by[1]))
 
     s = 0
     t = graph[0][0] - 1
 
     for i, j in pixels['add']['obj']:
-        p = i * n + j + 1
+        p = (i // group_by[0]) * ceil_n + (j // group_by[1]) + 1
         rp_bg = edges.get((s, p), 0)
         rp_obj = edges.get((p, t), 0)
 
-        edges[(s, p)] = rp_bg + rp_obj + k
+        edges[(s, p)] = int(round(rp_bg + rp_obj + k))
         if rp_bg + rp_obj > 0:
-            edges[(p, t)] = rp_bg + rp_obj
+            edges[(p, t)] = int(round(rp_bg + rp_obj))
 
     for i, j in pixels['add']['bg']:
-        p = i * n + j + 1
+        p = (i // group_by[0]) * ceil_n + (j // group_by[1]) + 1
         rp_bg = edges.get((s, p), 0)
         rp_obj = edges.get((p, t), 0)
 
         if rp_bg + rp_obj > 0:
-            edges[(s, p)] = rp_bg + rp_obj
-        edges[(p, t)] = rp_bg + rp_obj + k
+            edges[(s, p)] = int(round(rp_bg + rp_obj))
+        edges[(p, t)] = int(round(rp_bg + rp_obj + k))
 
     return get_min_cut(graph)
 
 
-def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k):
+def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k,
+                      group_by=default_blocking):
     print(f"\n\n\n\n====================\nRESULT IMPROVING START\n=================\n")
 
     image, verifier = open_images(file_name, verifier_name)
@@ -342,6 +380,7 @@ def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pix
     # 0. preparatory stage
     m = image.shape[0]
     n = image.shape[1]
+
     pixels = dict()
     pixels['add'] = dict()
     pixels['add']['obj'] = obj_pixels_to_add
@@ -350,13 +389,13 @@ def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pix
     # 1. get new weights and use them to get new min cut
     graph = string_to_graph(graph)
     graph_to_txt(graph, "loaded_from_save_graph.txt")
-    (obj, bg), graph_to_save = improve_result(graph, n, pixels, k)
+    (obj, bg), graph_to_save = improve_result(graph, n, group_by, pixels, k)
     print("Cut was got")
 
     graph_to_txt(graph_to_save, "graph_to_save_after_improving.txt")
 
     # 2. get image by min cut
-    result = get_splitting(m, n, obj)
+    result = get_splitting(m, n, obj, group_by)
     result_pic = Image.fromarray(result)
     print("Splitting was got")
 
