@@ -1,299 +1,207 @@
 import numpy as np
-import networkx as nx
+# import networkx as nx
 from .maxflow import Graph
 from PIL import Image
+import uuid
 
 white = 255
 
 
-def graph_by_image(m, n, is_four_neighbors=True):
-    n_links = dict()
-    a = 1  # initial weight of an edge
+def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors=True):
+    m = image.shape[0]
+    n = image.shape[1]
+
+    precision = 4
+    multiplier = pow(10, precision)
+
+    edges = dict()
 
     # ===============
     # adding n-links
     # ===============
 
-    # case (0, 0)
-    u = 0 * n + 0
-    n_links.update({(u, u + 1): a, (u, u + n): a})
-    if not is_four_neighbors:
-        n_links.update({(u, u + n + 1): a})
+    sqrt2 = np.sqrt(2)
+    sigma_coefficient = 2 * pow(sigma, 2)
 
-    # case (0, j), 0 < j < n - 1
-    for j in range(1, n - 1):
-        u = 0 * n + j
-        n_links.update({(u, u - 1): a, (u, u + 1): a, (u, u + n): a})
-        if not is_four_neighbors:
-            n_links.update({(u, u + n - 1): a, (u, u + n + 1): a})
+    exps = dict()
+    sum_of_bpq = np.zeros(m * n, dtype=int)
 
-    # case (0, n - 1)
-    u = 0 * n + n - 1
-    n_links.update({(u, u - 1): a, (u, u + n): a})
-    if not is_four_neighbors:
-        n_links.update({(u, u + n - 1): a})
+    # compute weight to n_link
+    def n_link_w(intensity_diff, dist):
+        if intensity_diff not in exps:
+            exps[intensity_diff] = np.exp(-pow(intensity_diff, 2) / sigma_coefficient)
+        return exps[intensity_diff] / dist
 
-    # case (i, 0), 0 < i < m - 1
-    for i in range(1, m - 1):
-        u = i * n + 0
-        n_links.update({(u, u - n): a, (u, u + 1): a, (u, u + n): a})
-        if not is_four_neighbors:
-            n_links.update({(u, u - n + 1): a, (u, u + n + 1): a})
+    # absolute of difference
+    def diff_abs(x, y):
+        if x >= y:
+            return x - y
+        else:
+            return y - x
 
-    # case (i, j), 0 < i < m - 1, 0 < j < n - 1
-    for i in range(1, m - 1):
-        for j in range(1, n - 1):
-            u = i * n + j
-            n_links.update({(u, u - n): a, (u, u - 1): a, (u, u + 1): a, (u, u + n): a})
+    for i in range(m):
+        for j in range(n):
+            right = j < n - 1
+            up = i > 0
+            left = j > 0
+            down = i < m - 1
+
+            w = [0, 0, 0, 0, 0, 0, 0, 0]  # right, right_up, ..., down, right_down
+
+            w[0] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i][j + 1]), 1.0),
+                                          precision)) if right else 0
+            w[2] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i - 1][j]), 1.0),
+                                          precision)) if up else 0
+            w[4] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i][j - 1]), 1.0),
+                                          precision)) if left else 0
+            w[6] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i + 1][j]), 1.0),
+                                          precision)) if down else 0
+
             if not is_four_neighbors:
-                n_links.update({(u, u - n - 1): a, (u, u - n + 1): a, (u, u + n - 1): a, (u, u + n + 1): a})
+                w[1] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i - 1][j + 1]), sqrt2),
+                                              precision)) if right and up else 0
+                w[3] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i - 1][j - 1]), sqrt2),
+                                              precision)) if left and up else 0
+                w[5] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i + 1][j - 1]), sqrt2),
+                                              precision)) if left and down else 0
+                w[7] = int(multiplier * round(n_link_w(diff_abs(image[i][j], image[i + 1][j + 1]), sqrt2),
+                                              precision)) if right and down else 0
 
-    # case (i, n - 1), 0 < i < m - 1
-    for i in range(1, m - 1):
-        u = i * n + n - 1
-        n_links.update({(u, u - n): a, (u, u - 1): a, (u, u + n): a})
-        if not is_four_neighbors:
-            n_links.update({(u, u - n - 1): a, (u, u + n - 1): a})
+            u = i * n + j + 1
+            sum_of_bpq[u - 1] = sum_of_bpq[u - 1] + sum(w)
+            if w[0] > 0:
+                edges[(u, u + 1)] = w[0]
+            if w[1] > 0:
+                edges[(u - n, u + 1)] = w[1]
+            if w[2] > 0:
+                edges[(u - n, u)] = w[2]
+            if w[3] > 0:
+                edges[(u - n, u - 1)] = w[3]
+            if w[4] > 0:
+                edges[(u, u - 1)] = w[4]
+            if w[5] > 0:
+                edges[(u + n, u - 1)] = w[5]
+            if w[6] > 0:
+                edges[(u + n, u)] = w[6]
+            if w[7] > 0:
+                edges[(u + n, u + 1)] = w[7]
 
-    # case (m - 1, 0)
-    u = (m - 1) * n + 0
-    n_links.update({(u, u - n): a, (u, u + 1): a})
-    if not is_four_neighbors:
-        n_links.update({(u, u - n + 1): a})
-
-    # case (m - 1, j), 0 < j < n - 1
-    for j in range(1, n - 1):
-        u = (m - 1) * n + j
-        n_links.update({(u, u - n): a, (u, u - 1): a, (u, u + 1): a})
-        if not is_four_neighbors:
-            n_links.update({(u, u - n - 1): a, (u, u - n + 1): a})
-
-    # case (m - 1, n - 1)
-    u = (m - 1) * n + n - 1
-    n_links.update({(u, u - n): a, (u, u - 1): a})
-    if not is_four_neighbors:
-        n_links.update({(u, u - n - 1): a})
+    k = 1 + max(sum_of_bpq)
 
     # ===============
     # adding t-links
     # ===============
 
-    t_links = dict()
-    for v in range(n * m):
-        t_links.update({(n * m, v): a})
-        t_links.update({(v, n * m + 1): a})
-    return (m * n + 2, len(n_links) + len(t_links)), n_links, t_links
-
-
-def binary_search(arr, el, start=0, end=None):
-    if end is None:
-        end = len(arr)
-    if el <= arr[start]:
-        return start
-    if arr[start] == arr[end - 1]:
-        return start
-    if arr[start + (end - start) // 2] > el:
-        return binary_search(arr, el, start, start + (end - start) // 2)
-    else:
-        return binary_search(arr, el, start + (end - start) // 2, end)
-
-
-def get_hist(image, pixels, hist_range):
-    hist = np.histogram([0], 1, hist_range, density=True)
-    if pixels:
-        intensity_list = [image[i][j] for i, j in pixels]
-        bins_number = (len(intensity_list) + 1) if len(intensity_list) <= 255 else 255
-        hist = np.histogram(intensity_list, bins_number, hist_range, density=True)
-    return hist
-
-
-def get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma):
-    m = image.shape[0]
-    n = image.shape[1]
-    n_links = graph[1]
-    t_links = graph[2]
-
-    exps = dict()
-    sqrt2 = np.sqrt(2)
-    sigma_coefficient = 2 * pow(sigma, 2)
-
-    sum_of_bpq = dict()
-    for p, q in list(n_links.keys()):
-        p_div = p // n
-        p_mod = p % n
-        q_div = q // n
-        q_mod = q % n
-
-        ip = image[p_div][p_mod]
-        iq = image[q_div][q_mod]
-
-        intensity_diff = ip - iq
-        if intensity_diff < 0:
-            intensity_diff = -intensity_diff
-        if intensity_diff not in exps:
-            exps[intensity_diff] = np.exp(-pow(intensity_diff, 2) / sigma_coefficient)
-
-        dist = sqrt2
-        diff = p - q
-        if diff == n or diff == -1 or diff == -n or diff == 1:
-            dist = 1
-
-        if exps[intensity_diff] > 0.0:
-            n_links[(p, q)] = exps[intensity_diff] / dist
-            sum_of_bpq[p] = sum_of_bpq.get(p, 0) + n_links[(p, q)]
-        else:
-            del n_links[(p, q)]
-    k = 1.0 + max(sum_of_bpq.values())
-    # print(k)
+    replace_inf = 1000.0
     hist_range = (0, 256)
+    s = 0
+    t = m * n + 1
 
-    obj_hist = get_hist(image, obj_pixels, hist_range)
-    bg_hist = get_hist(image, bg_pixels, hist_range)
+    def binary_search(arr, el, start=0, end=None):
+        if end is None:
+            end = len(arr)
+        if el <= arr[start]:
+            return start
+        if arr[start] == arr[end - 1]:
+            return start
+        if arr[start + (end - start) // 2] > el:
+            return binary_search(arr, el, start, start + (end - start) // 2)
+        else:
+            return binary_search(arr, el, start + (end - start) // 2, end)
+
+    def get_hist(pixels):
+        hist = np.histogram([0], 1, hist_range, density=True)
+        if pixels:
+            intensity_list = [image[_i][_j] for _i, _j in pixels]
+            bins_number = (len(intensity_list) + 1) if len(intensity_list) <= 255 else 255
+            hist = np.histogram(intensity_list, bins_number, hist_range, density=True)
+        return hist
+
+    obj_hist = get_hist(obj_pixels)
+    bg_hist = get_hist(bg_pixels)
 
     pr_obj_save = dict()
     pr_bg_save = dict()
-    # print(obj_pixels)
-    # print(bg_pixels)
-    for p in range(m * n):
-        if (p // n, p % n) in obj_pixels:
-            # print(f"{p} in obj_pixels")
-            t_links[(m * n, p)] = k
-            del t_links[(p, m * n + 1)]
-        elif (p // n, p % n) in bg_pixels:
-            # print(f"{p} in bg_pixels")
-            t_links[(p, m * n + 1)] = k
-            del t_links[(m * n, p)]
-        elif lyambda != 0.0:
-            # print(f"{p} not in obj_pixels and bg_pixels")
-            ip = image[p // n][p % n]
 
-            if ip not in pr_obj_save:
-                pr_obj_save[ip] = obj_hist[0][binary_search(obj_hist[1], ip)]
-            if ip not in pr_bg_save:
-                pr_bg_save[ip] = bg_hist[0][binary_search(bg_hist[1], ip)]
+    for i in range(m):
+        for j in range(n):
+            p = i * n + j + 1
+            if (i, j) in obj_pixels:
+                edges[(s, p)] = k
+            elif (i, j) in bg_pixels:
+                edges[(p, t)] = k
+            elif lyambda != 0.0:
+                ip = image[i][j]
 
-            pr_obj = pr_obj_save[ip]
-            pr_bg = pr_bg_save[ip]
+                if ip not in pr_obj_save:
+                    pr_obj_save[ip] = obj_hist[0][binary_search(obj_hist[1], ip)]
+                if ip not in pr_bg_save:
+                    pr_bg_save[ip] = bg_hist[0][binary_search(bg_hist[1], ip)]
 
-            pr_obj = pr_obj / (pr_obj + pr_bg)
-            pr_bg = 1.0 - pr_obj
-            r_obj = -np.log(pr_obj)
-            r_bg = -np.log(pr_bg)
-            # print(p, pr_obj, pr_bg, r_obj, r_bg)
+                pr_obj = pr_obj_save[ip]
+                pr_bg = pr_bg_save[ip]
 
-            if r_bg != 0.0:
-                t_links[(m * n, p)] = lyambda * r_bg
-            else:
-                del t_links[(m * n, p)]
-            if r_obj != 0.0:
-                t_links[(p, m * n + 1)] = lyambda * r_obj
-            else:
-                del t_links[(p, m * n + 1)]
-        else:
-            del t_links[(m * n, p)]
-            del t_links[(p, m * n + 1)]
+                if pr_obj == 0 and pr_bg == 0:
+                    pr_obj = pr_bg = 0.5
+                else:
+                    pr_obj = pr_obj / (pr_obj + pr_bg)
+                    pr_bg = 1.0 - pr_obj
 
-    return ((graph[0][0], len(graph[1]) + len(graph[2])), n_links, t_links), k
+                if pr_obj == 0.0:
+                    r_obj = replace_inf
+                else:
+                    r_obj = -np.log(pr_obj)
 
+                if pr_bg == 0.0:
+                    r_bg = replace_inf
+                else:
+                    r_bg = -np.log(pr_bg)
 
-def get_splitting(m, n, obj):
-    img = np.zeros((m, n), dtype=int)
-    for x in obj:
-        if x == m * n:
-            # print("Ola!")
-            pass
-        elif x == m * n + 1:
-            # print("WRONG!")
-            pass
-        else:
-            img[x // n][x % n] = white
-    return img.astype(np.uint8)
+                if r_bg != 0.0:
+                    edges[(s, p)] = int(multiplier * round(lyambda * r_bg, precision))
+                if r_obj != 0.0:
+                    edges[(p, t)] = int(multiplier * round(lyambda * r_obj, precision))
+
+    return ((m * n + 2, len(edges)), edges), k
 
 
-def graph_to_txt(edges, n):
-    file = open("MyFile.txt", "w")
-    file.write(f"{n} {len(edges)}\n")
-    for i, j in edges:
-        file.write(f"{i} {j} {edges[(i, j)]}\n")
-    file.close()
-
-
-def graph_to_string(edges, n):
-    result = f"{n} {len(edges)}"
-    for i, j in edges:
-        result += f" {i} {j} {edges[(i, j)]}"
-    return result
-
-
-def string_to_graph(string):
-    split_string = string.split(' ')
-    sizes = (int(split_string[0]), int(split_string[1]))
-    edges = dict()
-    print(sizes)
-    for i in range(0, sizes[1]):
-        print(i, split_string[2 + 3 * i], split_string[2 + 3 * i + 1], split_string[2 + 3 * i + 2])
-        edges[(int(split_string[2 + 3 * i]), int(split_string[2 + 3 * i + 1]))] = float(split_string[2 + 3 * i + 2])
-    return sizes, edges
-
-
-def convert_graph(graph):
-    edges = {}
-    for i, j in graph[1]:
-        edges[(i + 1, j + 1)] = graph[1][(i, j)]
-    for i, j in graph[2]:
-        if i == graph[0][0] - 2:
-            edges[(0, j + 1)] = graph[2][(i, j)]
-        else:
-            edges[(i + 1, j)] = graph[2][(i, j)]
-
-    return edges
-
-
-def convert_answer_back(obj, bg, n):
-    ans_obj = []
-    for i in obj:
-        if i != 0:
-            ans_obj.append(i - 1)
-    ans_bg = []
-    for i in bg:
-        if i != n - 1:
-            ans_bg.append(i - 1)
-    return ans_obj, ans_bg
-
-
-def standard_get_min_cut(graph):
-    g = nx.DiGraph()
-    for i, j in graph[1]:
-        g.add_edge(i, j, capacity=graph[1][(i, j)])
-    for i, j in graph[2]:
-        g.add_edge(i, j, capacity=graph[2][(i, j)])
-
-    cut_value, partition = nx.minimum_cut(g, graph[0][0] - 2, graph[0][0] - 1)
-    reachable, non_reachable = partition
-    print(f"Cut value is {np.round(cut_value, 3)}")
-
-    return reachable, non_reachable
+# def standard_get_min_cut(graph):
+#     g = nx.DiGraph()
+#     for i, j in graph[1]:
+#         g.add_edge(i, j, capacity=graph[1][(i, j)])
+#     for i, j in graph[2]:
+#         g.add_edge(i, j, capacity=graph[2][(i, j)])
+#
+#     cut_value, partition = nx.minimum_cut(g, graph[0][0] - 2, graph[0][0] - 1)
+#     reachable, non_reachable = partition
+#     print(f"Cut value is {np.round(cut_value, 3)}")
+#
+#     return reachable, non_reachable
 
 
 def get_min_cut(graph):
-    # edges = convert_graph(graph)
-    edges = {}
-    for i, j in graph[1]:
-        edges[(i, j)] = graph[1][(i, j)]
-    for i, j in graph[2]:
-        edges[(i, j)] = graph[2][(i, j)]
-    # edges = graph[1]
-    # print(graph)
-    graph_to_txt(edges, graph[0][0])
+    s = 0
+    t = graph[0][0] - 1
 
-    g = Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
-    print(f"Max flow: {g.push_relabel_max_flow(graph[0][0] - 2, graph[0][0] - 1)}")
-    g.get_min_cut()
+    g = Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=graph[1])
+    print(f"\nMax flow: {g.push_relabel_max_flow(s, t)}\n")
+    obj, bg, cut = g.get_min_cut()
 
-    # result = convert_answer_back(g.min_cut_object, g.min_cut_background, graph[0][0])
-    result = (g.min_cut_object, g.min_cut_background)
+    print(f"Minimal cut: {cut}\n")
 
-    return result, g.get_edges_and_res_cap_dict()
+    return (obj, bg), g.get_edges_and_res_cap_dict()
+
+
+def get_splitting(m, n, obj):
+    s = 0
+    t = m * n + 1
+
+    img = np.zeros((m, n), dtype=np.uint8)
+
+    for p in obj:
+        if p != s and p != t:
+            img[(p - 1) // n][(p - 1) % n] = white
+    return img
 
 
 def get_metrics(img, verifier):
@@ -323,99 +231,70 @@ def get_metrics(img, verifier):
     return counter / (m * n), tsm
 
 
-def improve_result(graph, n, pixels, k):
-    edges = graph[1]
-    s = graph[0][0] - 2
-    t = graph[0][0] - 1
+def open_images(file_name, verifier_name, needed_to_print=True):
+    img = Image.open(file_name)
+    if needed_to_print:
+        print(f"Image mode: {img.mode}")
+    img.convert('L')
+    image = np.asarray(img)
 
-    for i, j in pixels['add']['obj']:
-        p = i * n + j
-        rp_bg = edges.get((s, p), 0)
-        rp_obj = edges.get((p, t), 0)
-        edges[(s, p)] = rp_bg + rp_obj + k
-        edges[(p, t)] = rp_bg + rp_obj
-
-    for i, j in pixels['add']['bg']:
-        p = i * n + j
-        rp_bg = edges.get((s, p), 0)
-        rp_obj = edges.get((p, t), 0)
-        edges[(s, p)] = rp_bg + rp_obj
-        edges[(p, t)] = rp_bg + rp_obj + k
-
-    g = Graph(amount_of_vertex_and_edges=graph[0], edges_and_throughput=edges)
-    print(f"Max flow: {g.push_relabel_max_flow(s, t)}")
-    g.get_min_cut()
-
-    result = (g.min_cut_object, g.min_cut_background)
-
-    return result, g.get_edges_and_res_cap_dict()
+    ver_img = Image.open(verifier_name)
+    if needed_to_print:
+        print(f"Verifier mode: {ver_img.mode}\n")
+    ver_img.convert('L')
+    verifier = np.asarray(ver_img)
+    return image, verifier
 
 
 def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_neighbors, lyambda, sigma):
     print(f"\n\n\n\n====================\nALGORITHM START\n=================\n")
 
-    img = Image.open(file_name)
-    print(f"Image mode: {img.mode}")
-    img.convert('L')
-    image = np.asarray(img)
-
-    ver_img = Image.open(verifier_name)
-    print(f"Verifier mode: {ver_img.mode}")
-    ver_img.convert('L')
-    verifier = np.asarray(ver_img)
+    image, verifier = open_images(file_name, verifier_name)
 
     print(f"Object pixels are: ")
     print(obj_pixels)
-    print(f"Background pixels are: ")
+    print(f"\nBackground pixels are: ")
     print(bg_pixels)
-    print(f"Lambda={lyambda}, Sigma={sigma}")
+    print(f"\nLambda={lyambda}, Sigma={sigma}\n")
 
-    # print(file_name, verifier_name)
-
-    # print(f"seventh row of image: {image[7]}")
-    # print(f"seventh row of verifier: {verifier[7]}")
-
-    # print(image[0][0])
-    # print(verifier[7][7])
+    # print(f"Seventh row of image: {image[7]};\nSeventh row of verifier: {verifier[7]}\n")
+    # print(f"{image[0][0]} {verifier[7][7]}\n")
 
     # 0. preparatory stage
     m = image.shape[0]
     n = image.shape[1]
 
     # 1. build graph by image
-    graph = graph_by_image(m, n, is_four_neighbors)
-    print("Graph was created")
+    graph, k = graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors)
+    print("Graph was created\n")
     # print(graph)
     # print("=================")
     # print()
 
-    # 2. get weights for graph
-    graph, k = get_weights(graph, image, obj_pixels, bg_pixels, lyambda, sigma)
-    print("Weights were got")
-    # print(graph)
-    # print("=============")
-    # print()
+    graph_to_txt(graph, "original_graph.txt")
 
-    # 3. get min cut for graph
+    # 2. get min cut for graph
     (obj, bg), graph_to_save = get_min_cut(graph)
-    # obj1, bg1 = standard_get_min_cut(graph)
+    print("Min cut was got\n")
 
+    graph_to_txt(graph_to_save, "graph_to_save.txt")
+
+    # obj1, bg1 = standard_get_min_cut(graph)
     # print(f"Nikita's obj: {obj}")
     # print(f"Standard's obj: {obj1}")
 
-    # 4. get image by min cut
-    img = get_splitting(m, n, obj)
-    jpg = Image.fromarray(img)
-    jpg.save('test.bmp')
-    print("Splitting was got")
+    # 3. get image by min cut
+    result = get_splitting(m, n, obj)
+    result_pic = Image.fromarray(result)
+    print("Splitting was got\n")
 
     # 5. get metrics
-    tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
+    tfm, tsm = get_metrics(result, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
 
     print(f"\n====================\nALGORITHM END\n=================\n\n")
 
-    return graph_to_string(graph_to_save[1], graph_to_save[0][0]), k, jpg, tfm, tsm
+    return graph_to_string(graph_to_save), k, result_pic, tfm, tsm
     # print(f"Graph to save: {graph_to_save}")
     # graph_string = graph_to_string(graph_to_save[1], graph_to_save[0][0], graph_to_save[0][1])
     # print(f"Got string: {graph_string}")
@@ -425,16 +304,40 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     # return jpg
 
 
+def improve_result(graph, n, pixels, k):
+    edges = graph[1]
+
+    s = 0
+    t = graph[0][0] - 1
+
+    for i, j in pixels['add']['obj']:
+        p = i * n + j + 1
+        rp_bg = edges.get((s, p), 0)
+        rp_obj = edges.get((p, t), 0)
+
+        edges[(s, p)] = rp_bg + rp_obj + k
+        if rp_bg + rp_obj > 0:
+            edges[(p, t)] = rp_bg + rp_obj
+
+    for i, j in pixels['add']['bg']:
+        p = i * n + j + 1
+        rp_bg = edges.get((s, p), 0)
+        rp_obj = edges.get((p, t), 0)
+
+        if rp_bg + rp_obj > 0:
+            edges[(s, p)] = rp_bg + rp_obj
+        edges[(p, t)] = rp_bg + rp_obj + k
+
+    return get_min_cut(graph)
+
+
 def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pixels_to_add, k):
     print(f"\n\n\n\n====================\nRESULT IMPROVING START\n=================\n")
 
-    print(f"Object pixels to add: {obj_pixels_to_add}")
-    print(f"Background pixels to add: {bg_pixels_to_add}")
+    image, verifier = open_images(file_name, verifier_name)
 
-    img = Image.open(file_name).convert('L')
-    image = np.asarray(img)
-    ver_img = Image.open(verifier_name).convert('L')
-    verifier = np.asarray(ver_img)
+    print(f"Object pixels to add: {obj_pixels_to_add}\n")
+    print(f"Background pixels to add: {bg_pixels_to_add}\n")
 
     # 0. preparatory stage
     m = image.shape[0]
@@ -445,21 +348,67 @@ def improve_algorithm(file_name, verifier_name, graph, obj_pixels_to_add, bg_pix
     pixels['add']['bg'] = bg_pixels_to_add
 
     # 1. get new weights and use them to get new min cut
-    # print(graph)
     graph = string_to_graph(graph)
+    graph_to_txt(graph, "loaded_from_save_graph.txt")
     (obj, bg), graph_to_save = improve_result(graph, n, pixels, k)
     print("Cut was got")
 
+    graph_to_txt(graph_to_save, "graph_to_save_after_improving.txt")
+
     # 2. get image by min cut
-    img = get_splitting(m, n, obj)
-    jpg = Image.fromarray(img)
-    jpg.save('test.bmp')
+    result = get_splitting(m, n, obj)
+    result_pic = Image.fromarray(result)
     print("Splitting was got")
 
     # 3. get metrics
-    tfm, tsm = get_metrics(img, verifier)  # the first metric, the second metric
+    tfm, tsm = get_metrics(result, verifier)  # the first metric, the second metric
     print(f"The first metric: {np.round(tfm, 3)}\nThe second metric: {np.round(tsm, 3)}")
 
     print(f"\n====================\nRESULT IMPROVING END\n=================\n\n")
 
-    return graph_to_string(graph_to_save[1], graph_to_save[0][0]), jpg, tfm, tsm
+    return graph_to_string(graph_to_save), result_pic, tfm, tsm
+
+
+def graph_to_txt(graph, filename=None):
+    v = graph[0][0]
+    e = graph[0][1]
+    edges = graph[1]
+
+    if e != len(edges):
+        raise Exception(f"Number of edges: {e} is not equal to length of the dict of edges: {len(edges)}")
+
+    if not filename:
+        file = open(f"MyFile_{uuid.uuid4().hex[-5:-1]}.txt", "w")
+    else:
+        file = open(filename, "w")
+
+    file.write(f"{v} {e}\n")
+    for i, j in edges:
+        file.write(f"{i + 1} {j + 1} {edges[(i, j)]}\n")
+    file.close()
+
+
+def graph_to_string(graph):
+    v = graph[0][0]
+    e = graph[0][1]
+    edges = graph[1]
+
+    if e != len(edges):
+        raise Exception(f"Number of edges: {e} is not equal to length of the dict of edges: {len(edges)}")
+
+    result = f"{v} {e}"
+    for i, j in edges:
+        result += f" {i} {j} {edges[(i, j)]}"
+    return result
+
+
+def string_to_graph(string):
+    split_string = string.split(' ')
+    sizes = (int(split_string[0]), int(split_string[1]))
+    edges = dict()
+    for i in range(0, sizes[1]):
+        edges[(int(split_string[2 + 3 * i]), int(split_string[2 + 3 * i + 1]))] = int(split_string[2 + 3 * i + 2])
+
+    if sizes[1] != len(edges):
+        raise Exception(f"Number of edges: {sizes[1]} is not equal to length of the dict of edges: {len(edges)}")
+    return sizes, edges

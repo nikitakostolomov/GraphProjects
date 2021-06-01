@@ -2,7 +2,6 @@ import collections
 import os
 import time
 from typing import Tuple
-import math
 
 
 class Graph:
@@ -53,7 +52,15 @@ class Graph:
             ) = self.get_data_from_file()
         else:
             self.amount_of_vertex_and_edges = amount_of_vertex_and_edges
-            self.edges_and_throughput = self.remove_inf(edges_and_throughput)
+            # self.edges_and_throughput = self.remove_inf(edges_and_throughput)
+            self.edges_and_throughput = edges_and_throughput
+
+        # self.counter_pushing = 0
+        # self.counter_relabeling = 0
+        # self.counter_global_relabeling = 0
+        # self.counter_global_relabeling_bfs = 0
+        # self.counter_min_cut_bfs = 0
+        # self.counter_bfs = 0
 
         self.start = 0
         self.end = self.amount_of_vertex_and_edges[0] - 1
@@ -69,18 +76,18 @@ class Graph:
         self._glob_rel_value = 1
 
         self._max_flow = 0
-        self._min_cut = 0
+        self._min_cut = []
         self._min_cut_object = set()
         self._min_cut_background = set()
 
-    @staticmethod
-    def remove_inf(edges_and_throughput):
-        for edge, throughput in edges_and_throughput.items():
-            if edges_and_throughput[edge] == float("inf"):
-                edges_and_throughput[edge] = 1000
-            if math.isnan(edges_and_throughput[edge]):
-                edges_and_throughput[edge] = 0
-        return edges_and_throughput
+    # @staticmethod
+    # def remove_inf(edges_and_throughput):
+    #     for edge, throughput in edges_and_throughput.items():
+    #         if edges_and_throughput[edge] == float("inf"):
+    #             edges_and_throughput[edge] = 1000
+    #         if math.isnan(edges_and_throughput[edge]):
+    #             edges_and_throughput[edge] = 0
+    #     return edges_and_throughput
 
     def get_data_from_file(self) -> Tuple[tuple, dict]:
         """
@@ -177,6 +184,7 @@ class Graph:
             self.vertex_and_height_excess[vertex].append(adjacent_vertices[1])
 
     def push(self, edge: tuple, *args) -> None:
+        # self.counter_pushing = self.counter_pushing + 1
         """
         По ребру (u,v) пропускается максимально возможный поток, то есть минимум из избытка вершины u
         и остаточной пропускной способности ребра (u,v), вследствие чего избыток вершины u,
@@ -239,6 +247,7 @@ class Graph:
             self.vertex_and_height_excess[end_vertex][3].discard(start_vertex)
 
     def relabel(self, vertex: int, *args) -> None:
+        # self.counter_relabeling = self.counter_relabeling + 1
         """
         Для переполненной вершины u применима операция подъёма, если все вершины, для которых в остаточной сети есть
         рёбра из u, расположены не ниже u. Следовательно, операцию проталкивания для вершины u произвести нельзя.
@@ -301,6 +310,13 @@ class Graph:
         return export_adjacent_vertices, import_adjacent_vertices
 
     def push_relabel_max_flow(self, source: int = -1, sink: int = -1) -> int:
+        # self.counter_pushing = 0
+        # self.counter_relabeling = 0
+        # self.counter_global_relabeling = 0
+        # self.counter_global_relabeling_bfs = 0
+        # self.counter_min_cut_bfs = 0
+        # self.counter_bfs = 0
+        # print(f"Check if it starts from zero: {self.counter_pushing}")
         """
         Вершины с положительным избытком обрабатываются (просматриваются) в порядке first-in, first-out.
         Вершина извлекается из списка и делаются операции push пока это возможно. Новые вершины с избытком добавляются в
@@ -384,9 +400,16 @@ class Graph:
 
         self.max_flow = self.vertex_and_height_excess[self.sink][1]
 
+        # print(f"Pushing: {self.counter_pushing}")
+        # print(f"Relabeling: {self.counter_relabeling}")
+        # print(f"Global relabeling: {self.counter_global_relabeling}")
+        # print(f"Global relabeling bfs: {self.counter_global_relabeling_bfs}")
+        # print(f"Min cut bfs: {self.counter_min_cut_bfs}")
+        # print(f"Bfs: {self.counter_bfs}")
         return self.max_flow
 
     def global_relabeling_bfs(self, source):
+        # self.counter_global_relabeling_bfs = self.counter_global_relabeling_bfs + 1
         visited, queue = set(), collections.deque(
             [source]
         )  # посещенные вершины - множество, смежные с ними попадают
@@ -420,6 +443,7 @@ class Graph:
             return vertices_dist
 
     def min_cut_bfs(self):
+        # self.counter_min_cut_bfs = self.counter_min_cut_bfs + 1
         visited, queue = set(), collections.deque(
             [self.source]
         )  # посещенные вершины - множество, смежные с ними попадают
@@ -439,6 +463,7 @@ class Graph:
         return visited
 
     def bfs(self, source: int, destination: int = -1) -> int or False or set:
+        # self.counter_bfs = self.counter_bfs + 1
         """
         Начинаем обход графа с вершины (source) и идем, пока не дойдем до пункта назначения (destination), также считаем
         расстояния от вершины до пункта назначения. Далее возвращаем расстояние до пункта назнаечния.
@@ -503,7 +528,7 @@ class Graph:
         else:
             return visited
 
-    def get_min_cut(self) -> Tuple[set, set]:
+    def get_min_cut(self) -> Tuple[set, set, list]:
         """
         Находит минимальный разрез следующим способом: пытаемся добраться до всех вершин из истока в остаточной сети
         с помощью bfs, все найденные вершины будут слева от разреза, остальные справа. Минимальным разрезом будет сумма
@@ -513,20 +538,21 @@ class Graph:
             self.min_cut_bfs()
         )  # ищем вершины, до которых можно добраться из истока
 
-        # for edge in self.edges_and_throughput:
-        #     if (
-        #         edge[0] in self.min_cut_object
-        #         and edge[1] not in self.min_cut_object
-        #     ):
-        #         self.min_cut += self.edges_and_throughput[edge]  # нахождение значения минимального разреза
+        for edge in self.edges_and_throughput:
+            if (
+                edge[0] in self.min_cut_object
+                and edge[1] not in self.min_cut_object
+            ):
+                self.min_cut.append(edge)  # нахождение значения минимального разреза
 
         for vertex in range(self.amount_of_vertex_and_edges[0]):
             if vertex not in self.min_cut_object:
                 self.min_cut_background.add(vertex)
 
-        return self.min_cut_object, self.min_cut_background
+        return self.min_cut_object, self.min_cut_background, self.min_cut
 
     def global_relabeling(self) -> None:
+        # self.counter_global_relabeling = self.counter_global_relabeling + 1
         """
         Для каждой вершины запускаем bfs до стока, если расстояние больше чем высота вершины, то высоту полагаем равной
         расстоянию от вершины до стока.
