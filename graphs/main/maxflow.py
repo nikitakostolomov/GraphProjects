@@ -52,7 +52,12 @@ class Graph:
             ) = self.get_data_from_file()
         else:
             self.amount_of_vertex_and_edges = amount_of_vertex_and_edges
+            # self.edges_and_throughput = self.remove_inf(edges_and_throughput)
             self.edges_and_throughput = edges_and_throughput
+
+        # self.counter_pushing = 0
+        # self.counter_relabeling = 0
+        # self.counter_global_relabeling = 0
 
         self.start = 0
         self.end = self.amount_of_vertex_and_edges[0] - 1
@@ -68,9 +73,18 @@ class Graph:
         self._glob_rel_value = 1
 
         self._max_flow = 0
-        self._min_cut = 0
+        self._min_cut = []
         self._min_cut_object = set()
         self._min_cut_background = set()
+
+    # @staticmethod
+    # def remove_inf(edges_and_throughput):
+    #     for edge, throughput in edges_and_throughput.items():
+    #         if edges_and_throughput[edge] == float("inf"):
+    #             edges_and_throughput[edge] = 1000
+    #         if math.isnan(edges_and_throughput[edge]):
+    #             edges_and_throughput[edge] = 0
+    #     return edges_and_throughput
 
     def get_data_from_file(self) -> Tuple[tuple, dict]:
         """
@@ -81,7 +95,7 @@ class Graph:
         """
         edges_and_throughput = {}
         with open(self.path) as f:
-            list_of_vertexes_edges = list(map(int, f.readline().strip().split()))
+            list_of_vertexes_edges = tuple(map(int, f.readline().strip().split()))
             vertexes_edges = list_of_vertexes_edges[0], list_of_vertexes_edges[1]
             for line in f:
                 edge_throughput = list(map(int, line.split()))
@@ -105,18 +119,22 @@ class Graph:
             self.amount_of_vertex_and_edges = args[1]
             self.edges_and_throughput = args[2]
 
-        self.vertex_and_height_excess.append(
-            [self.amount_of_vertex_and_edges[self.source], 0]
-        )  # источнику в словаре добавляем его избыток
+        # self.vertex_and_height_excess.append(
+        #     [self.source, 0]
+        # )  # источнику в словаре добавляем его избыток
 
-        for vertex in range(1, self.amount_of_vertex_and_edges[0]):
-
-            self.vertex_and_height_excess.append(
-                [
-                    0,
-                    0,
-                ]
-            )  # для вершин, не являющихся источником, устанавливаем высоту и избыток равными нулю
+        for vertex in range(self.amount_of_vertex_and_edges[0]):
+            if vertex != self.source:
+                self.vertex_and_height_excess.append(
+                    [
+                        0,
+                        0,
+                    ]
+                )  # для вершин, не являющихся источником, устанавливаем высоту и избыток равными нулю
+            else:
+                self.vertex_and_height_excess.append(
+                    [self.amount_of_vertex_and_edges[0], 0]
+                )
 
         for (
             edge,
@@ -163,6 +181,7 @@ class Graph:
             self.vertex_and_height_excess[vertex].append(adjacent_vertices[1])
 
     def push(self, edge: tuple, *args) -> None:
+        # self.counter_pushing = self.counter_pushing + 1
         """
         По ребру (u,v) пропускается максимально возможный поток, то есть минимум из избытка вершины u
         и остаточной пропускной способности ребра (u,v), вследствие чего избыток вершины u,
@@ -225,6 +244,7 @@ class Graph:
             self.vertex_and_height_excess[end_vertex][3].discard(start_vertex)
 
     def relabel(self, vertex: int, *args) -> None:
+        # self.counter_relabeling = self.counter_relabeling + 1
         """
         Для переполненной вершины u применима операция подъёма, если все вершины, для которых в остаточной сети есть
         рёбра из u, расположены не ниже u. Следовательно, операцию проталкивания для вершины u произвести нельзя.
@@ -244,7 +264,8 @@ class Graph:
         for adj in adjacent_vertices:
             edge = (vertex, adj)
             if (
-                self.edges_and_flow_residual_capacity[edge][0]
+                # self.edges_and_flow_residual_capacity[edge][0]
+                0
                 < self.edges_and_flow_residual_capacity[edge][1]
             ):  # если поток ребра меньше его пропускной способности, то высоту смежной вершины добавляем в словарь
                 adjacent_vertices_and_height[adj] = self.vertex_and_height_excess[adj][
@@ -287,6 +308,10 @@ class Graph:
         return export_adjacent_vertices, import_adjacent_vertices
 
     def push_relabel_max_flow(self, source: int = -1, sink: int = -1) -> int:
+        # self.counter_pushing = 0
+        # self.counter_relabeling = 0
+        # self.counter_global_relabeling = 0
+        # print(f"Check if it starts from zero: {self.counter_pushing}")
         """
         Вершины с положительным избытком обрабатываются (просматриваются) в порядке first-in, first-out.
         Вершина извлекается из списка и делаются операции push пока это возможно. Новые вершины с избытком добавляются в
@@ -370,6 +395,9 @@ class Graph:
 
         self.max_flow = self.vertex_and_height_excess[self.sink][1]
 
+        # print(f"Pushing: {self.counter_pushing}")
+        # print(f"Relabeling: {self.counter_relabeling}")
+        # print(f"Global relabeling: {self.counter_global_relabeling}")
         return self.max_flow
 
     def global_relabeling_bfs(self, source):
@@ -489,7 +517,7 @@ class Graph:
         else:
             return visited
 
-    def get_min_cut(self) -> Tuple[set, set]:
+    def get_min_cut(self) -> Tuple[set, set, list]:
         """
         Находит минимальный разрез следующим способом: пытаемся добраться до всех вершин из истока в остаточной сети
         с помощью bfs, все найденные вершины будут слева от разреза, остальные справа. Минимальным разрезом будет сумма
@@ -499,20 +527,21 @@ class Graph:
             self.min_cut_bfs()
         )  # ищем вершины, до которых можно добраться из истока
 
-        # for edge in self.edges_and_throughput:
-        #     if (
-        #         edge[0] in self.min_cut_object
-        #         and edge[1] not in self.min_cut_object
-        #     ):
-        #         self.min_cut += self.edges_and_throughput[edge]  # нахождение значения минимального разреза
+        for edge in self.edges_and_throughput:
+            if (
+                edge[0] in self.min_cut_object
+                and edge[1] not in self.min_cut_object
+            ):
+                self.min_cut.append(edge)  # нахождение значения минимального разреза
 
         for vertex in range(self.amount_of_vertex_and_edges[0]):
             if vertex not in self.min_cut_object:
                 self.min_cut_background.add(vertex)
 
-        return self.min_cut_object, self.min_cut_background
+        return self.min_cut_object, self.min_cut_background, self.min_cut
 
     def global_relabeling(self) -> None:
+        # self.counter_global_relabeling = self.counter_global_relabeling + 1
         """
         Для каждой вершины запускаем bfs до стока, если расстояние больше чем высота вершины, то высоту полагаем равной
         расстоянию от вершины до стока.
@@ -523,18 +552,17 @@ class Graph:
         if distance is not False:
             for vertex in distance:
                 if (
-                    self.vertex_and_height_excess[vertex][0] < distance[vertex]
-                    and vertex != self.source
-                    and distance[vertex] != 1000000
+                        self.vertex_and_height_excess[vertex][0] < distance[vertex] != 1000000
+                        and vertex != self.source
                 ):
                     self.vertex_and_height_excess[vertex][0] = distance[vertex]
         else:
             distance = self.global_relabeling_bfs(self.source)
+            # if distance is not False:
             for vertex in distance:
                 if (
-                    self.vertex_and_height_excess[vertex][0] < distance[vertex]
-                    and vertex != self.sink
-                    and distance[vertex] != 1000000
+                        self.vertex_and_height_excess[vertex][0] < distance[vertex] != 1000000
+                        and vertex != self.sink
                 ):
                     self.vertex_and_height_excess[vertex][0] = distance[vertex]
 
@@ -561,7 +589,8 @@ class Graph:
             if flow_res_cap[1] > 0:
                 edges_and_res_cap[edge] = flow_res_cap[1]
 
-        return edges_and_res_cap
+        amount_vert_and_edges = self.amount_of_vertex_and_edges[0], len(edges_and_res_cap)
+        return amount_vert_and_edges, edges_and_res_cap
 
     @property
     def source(self):
@@ -685,19 +714,7 @@ def read_files_and_find_max_flow(directory):
         print("Значение максимального потока:", g.max_flow)
         # print("Вершины слева от разреза:", g.min_cut_object)
         # print("Вершины справа от разреза:", g.min_cut_background)
-        print("Минимальный разрез: ", g.min_cut)
-        g.check_equality_min_cut_and_max_flow()
+        # print("Минимальный разрез: ", g.min_cut)
+        # g.check_equality_min_cut_and_max_flow()
         end = time.time()
         print("Времени заняло:", round(end - start, 3))
-
-
-if __name__ == "__main__":
-    # read_files_and_find_max_flow(
-    #     "MaxFlow-tests"
-    # )  # для работы с директорией, в которой находятся тесты
-
-    g = Graph(
-        path="MaxFlow-tests/test_rd04.txt"
-    )  # для работы с конкретным файлом, лучше указывать полный путь
-    print(g.push_relabel_max_flow())
-    print(g.get_min_cut())

@@ -21,6 +21,8 @@ class Graph_and_pixels(models.Model):
     object_pixels = models.TextField()
     background_pixels = models.TextField()
     K = models.FloatField()
+    tfm = models.FloatField()
+    tsm = models.FloatField()
 
 
 

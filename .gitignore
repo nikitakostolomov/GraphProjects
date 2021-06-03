@@ -141,3 +141,7 @@ cython_debug/
 **.jpeg
 **.jpg
 **.bmp
+!graphs/requirements.txt
+**.txt
+**.png
+graphs/main/migrations/
