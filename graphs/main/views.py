@@ -4,7 +4,7 @@ import re
 
 from django.shortcuts import render
 
-from .algorithms import start_algorithm, start_improving
+from .algorithm_interface import start_algorithm, start_improving
 from .forms import ImageForm
 from .models import Graph_and_pixels
 
