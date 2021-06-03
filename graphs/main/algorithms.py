@@ -4,12 +4,17 @@ from .maxflow import Graph
 from PIL import Image
 import uuid
 from math import ceil
+from .newmaxflow import push_relabel_max_flow
+from time import time
 
 white = 255
-default_blocking = (6, 6)
+default_precision = 3
+default_blocking = (10, 10)
+default_intensity_object_key = 0
 
 
-def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors, group_by, precision):
+def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors, group_by,
+                   precision, intensity_obj_key):
     m = image.shape[0]
     n = image.shape[1]
 
@@ -39,10 +44,21 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
 
     # absolute of difference
     def diff_abs(_x, _y):
-        if _x >= _y:
-            return _x - _y
+        if intensity_obj_key == 2:
+            if _x <= _y:
+                return 0
+            else:
+                return _x - _y
+        elif intensity_obj_key == 1:
+            if _x >= _y:
+                return 0
+            else:
+                return _y - _x
         else:
-            return _y - _x
+            if _x >= _y:
+                return _x - _y
+            else:
+                return _y - _x
 
     def block_intensity(_i, _j):
         block = image[_i * group_by[0]:(_i + 1) * group_by[0], _j * group_by[1]:(_j + 1) * group_by[1]]
@@ -95,13 +111,13 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
             if w[7] > 0:
                 edges[(u + ceil_n, u + 1)] = w[7]
 
-    k = 1 + max(sum_of_bpq)
+    k = 2 + max(sum_of_bpq)
 
     # ===============
     # adding t-links
     # ===============
 
-    replace_inf = 1000.0
+    replace_inf = k - 1
     hist_range = (0, 256)
     s = 0
     t = v - 1
@@ -179,17 +195,21 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
                 if pr_obj == 0.0:
                     r_obj = replace_inf
                 else:
-                    r_obj = -np.log(pr_obj)
+                    r_obj = multiplier * round(-np.log(pr_obj) * lyambda, precision)
+                    if r_obj > replace_inf:
+                        r_obj = replace_inf
 
                 if pr_bg == 0.0:
                     r_bg = replace_inf
                 else:
-                    r_bg = -np.log(pr_bg)
+                    r_bg = multiplier * round(-np.log(pr_bg) * lyambda, precision)
+                    if r_bg > replace_inf:
+                        r_bg = replace_inf
 
                 if r_bg != 0.0:
-                    edges[(s, p)] = int(multiplier * round(lyambda * r_bg, precision))
+                    edges[(s, p)] = int(r_bg)
                 if r_obj != 0.0:
-                    edges[(p, t)] = int(multiplier * round(lyambda * r_obj, precision))
+                    edges[(p, t)] = int(r_obj)
 
     return ((v, len(edges)), edges), k
 
@@ -208,7 +228,7 @@ def graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbo
 #     return reachable, non_reachable
 
 
-def get_min_cut(graph, need_to_print_value=True, need_to_print_edges=False):
+def old_get_min_cut(graph, need_to_print_value=True, need_to_print_edges=False):
     s = 0
     t = graph[0][0] - 1
 
@@ -222,6 +242,20 @@ def get_min_cut(graph, need_to_print_value=True, need_to_print_edges=False):
         print(f"Minimal cut: {cut}\n")
 
     return (obj, bg), g.get_edges_and_res_cap_dict()
+
+
+def get_min_cut(graph, need_to_print_cut_value=True, need_to_print_cut_edges=False):
+    s = 0
+    t = graph[0][0] - 1
+
+    (obj, bg), graph_to_save, min_cut_value, min_cut_edges = push_relabel_max_flow(graph, s, t, need_to_print_cut_edges)
+
+    if need_to_print_cut_value:
+        print(f"\nMax flow: {min_cut_value}\n")
+    if need_to_print_cut_edges:
+        print(f"Minimal cut: {min_cut_edges}\n")
+
+    return (obj, bg), graph_to_save
 
 
 def get_splitting(m, n, obj, group_by):
@@ -283,8 +317,10 @@ def open_images(file_name, verifier_name, needed_to_print=True):
     return image, verifier
 
 
+# if intensity_obj_key == 2 then object is brighter than background, if ... == 1 then the opposite
+# if ... == 0 then do not use this feature
 def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_neighbors, lyambda, sigma,
-                    group_by=default_blocking, precision=3):
+                    group_by=default_blocking, precision=default_precision, intensity_obj_key=default_intensity_object_key):
     print(f"\n\n\n\n====================\nALGORITHM START\n=================\n")
 
     image, verifier = open_images(file_name, verifier_name)
@@ -301,7 +337,8 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     n = image.shape[1]
 
     # 1. build graph by image
-    graph, k = graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors, group_by, precision)
+    graph, k = graph_by_image(image, obj_pixels, bg_pixels, lyambda, sigma, is_four_neighbors, group_by,
+                              precision, intensity_obj_key)
     print("Graph was created\n")
     # print(graph)
     # print("=================")
@@ -310,8 +347,17 @@ def start_algorithm(file_name, verifier_name, obj_pixels, bg_pixels, is_four_nei
     graph_to_txt(graph, "original_graph.txt")
 
     # 2. get min cut for graph
+    # start = time()
+    # (old_obj, old_bg), graph_to_save_old = old_get_min_cut(graph)
+    # end = time()
+    # print(f"Old min cut was got in {end - start}\n")
+    # # print(f"Old obj is {old_obj}\nOld bg is {old_bg}\n")
+
+    start = time()
     (obj, bg), graph_to_save = get_min_cut(graph)
-    print("Min cut was got\n")
+    end = time()
+    print(f"Min cut was got in {end - start}\n")
+    # print(f"Obj is {obj}\nBg is {bg}\n")
 
     graph_to_txt(graph_to_save, "graph_to_save.txt")
 

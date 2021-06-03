@@ -58,9 +58,6 @@ class Graph:
         # self.counter_pushing = 0
         # self.counter_relabeling = 0
         # self.counter_global_relabeling = 0
-        # self.counter_global_relabeling_bfs = 0
-        # self.counter_min_cut_bfs = 0
-        # self.counter_bfs = 0
 
         self.start = 0
         self.end = self.amount_of_vertex_and_edges[0] - 1
@@ -267,7 +264,8 @@ class Graph:
         for adj in adjacent_vertices:
             edge = (vertex, adj)
             if (
-                self.edges_and_flow_residual_capacity[edge][0]
+                # self.edges_and_flow_residual_capacity[edge][0]
+                0
                 < self.edges_and_flow_residual_capacity[edge][1]
             ):  # если поток ребра меньше его пропускной способности, то высоту смежной вершины добавляем в словарь
                 adjacent_vertices_and_height[adj] = self.vertex_and_height_excess[adj][
@@ -313,9 +311,6 @@ class Graph:
         # self.counter_pushing = 0
         # self.counter_relabeling = 0
         # self.counter_global_relabeling = 0
-        # self.counter_global_relabeling_bfs = 0
-        # self.counter_min_cut_bfs = 0
-        # self.counter_bfs = 0
         # print(f"Check if it starts from zero: {self.counter_pushing}")
         """
         Вершины с положительным избытком обрабатываются (просматриваются) в порядке first-in, first-out.
@@ -403,13 +398,9 @@ class Graph:
         # print(f"Pushing: {self.counter_pushing}")
         # print(f"Relabeling: {self.counter_relabeling}")
         # print(f"Global relabeling: {self.counter_global_relabeling}")
-        # print(f"Global relabeling bfs: {self.counter_global_relabeling_bfs}")
-        # print(f"Min cut bfs: {self.counter_min_cut_bfs}")
-        # print(f"Bfs: {self.counter_bfs}")
         return self.max_flow
 
     def global_relabeling_bfs(self, source):
-        # self.counter_global_relabeling_bfs = self.counter_global_relabeling_bfs + 1
         visited, queue = set(), collections.deque(
             [source]
         )  # посещенные вершины - множество, смежные с ними попадают
@@ -443,7 +434,6 @@ class Graph:
             return vertices_dist
 
     def min_cut_bfs(self):
-        # self.counter_min_cut_bfs = self.counter_min_cut_bfs + 1
         visited, queue = set(), collections.deque(
             [self.source]
         )  # посещенные вершины - множество, смежные с ними попадают
@@ -463,7 +453,6 @@ class Graph:
         return visited
 
     def bfs(self, source: int, destination: int = -1) -> int or False or set:
-        # self.counter_bfs = self.counter_bfs + 1
         """
         Начинаем обход графа с вершины (source) и идем, пока не дойдем до пункта назначения (destination), также считаем
         расстояния от вершины до пункта назначения. Далее возвращаем расстояние до пункта назнаечния.
