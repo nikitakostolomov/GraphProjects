@@ -5,22 +5,24 @@ import numpy as np
 from .algorithms import graph_by_image, get_metrics, get_min_cut, get_splitting, improve_result
 
 default_precision = 3
-default_blocking = (10, 10)
+default_blocking = (4, 4)
 default_intensity_object_key = 0
 
 
 def open_images(file_name, verifier_name, needed_to_print=True):
-    img = Image.open(file_name)
+    img = Image.open(file_name).convert('L')
     if needed_to_print:
         print(f"Image mode: {img.mode}")
-    img.convert('L')
     image = np.asarray(img)
 
-    ver_img = Image.open(verifier_name)
+    ver_img = Image.open(verifier_name).convert('L')
     if needed_to_print:
         print(f"Verifier mode: {ver_img.mode}\n")
-    ver_img.convert('L')
     verifier = np.asarray(ver_img)
+
+    print(image[0][0])
+    print(verifier[0][0])
+
     return image, verifier
 
 

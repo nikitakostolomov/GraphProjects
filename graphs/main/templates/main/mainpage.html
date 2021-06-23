@@ -69,21 +69,21 @@
 
 
     <script>
-        var flag = false, currX = 0, currY = 0, dot_flag = false;
-        var x = "black",y = 2;
-        var canvas=document.getElementById("canvas");
-        var context=canvas.getContext("2d");
-        var pixel_canvas=document.getElementById("pixel_canvas");
-        var pixel_context=pixel_canvas.getContext("2d");
-        var image=new Image();
+        let flag = false, currX = 0, currY = 0, dot_flag = false;
+        const x = "black", y = 2;
+        const canvas = document.getElementById("canvas");
+        const context = canvas.getContext("2d");
+        const pixel_canvas = document.getElementById("pixel_canvas");
+        const pixel_context = pixel_canvas.getContext("2d");
+        const image = new Image();
         image.src="/media/{{ img }}";
         image.crossOrigin = 'anonymous';
-        var width, height;
-        var object_pixels=[], background_pixels=[];
-        var is_background;
-        var result = document.getElementById("result_canvas");
-        var result_context = result.getContext("2d");
-        var ratio,hRatio, vRatio;
+        let width, height;
+        let object_pixels = [], background_pixels = [];
+        let is_background;
+        const result = document.getElementById("result_canvas");
+        const result_context = result.getContext("2d");
+        let ratio, hRatio, vRatio;
         const yellow='#fde910';
         const violet='#a000a0';
         const screenWidth = window.screen.width
@@ -113,7 +113,7 @@
                 }, false);
             }
         function findxy(res, e) {
-            if (res == 'down') {
+            if (res === 'down') {
                 currX = e.clientX - canvas.offsetLeft;
                 currY = e.clientY - canvas.offsetTop;
         
@@ -135,10 +135,10 @@
                     dot_flag = false;
                 }
             }
-            if (res == 'up' || res == "out") {
+            if (res === 'up' || res === "out") {
                 flag = false;
             }
-            if (res == 'move') {
+            if (res === 'move') {
                 if (flag) {
                     currX = e.clientX - canvas.offsetLeft;
                     currY = e.clientY - canvas.offsetTop;
@@ -186,11 +186,19 @@
             pixel_canvas.width = width;
             pixel_canvas.height = height; 
             context.drawImage(image, 0,0, width, height); 
-            
+            const imgData = context.getImageData(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < imgData.data.length; i += 4) {
+                let count = imgData.data[i] * 0.2989 + imgData.data[i + 1] * 0.5870 + imgData.data[i + 2] * 0.1140
+
+                imgData.data[i] = count
+                imgData.data[i + 1] = count
+                imgData.data[i + 2] = count
+            }
+            context.putImageData(imgData, 0, 0);
 
             // Окно результата
-            if ('{{ result_img }}'== 'media/imagesresult/imgresult.jpeg'){
-                var image_result=new Image();
+            if ('{{ result_img }}'=== 'media/imagesresult/imgresult.jpeg'){
+                const image_result = new Image();
                 image_result.src='{{ result_img }}';
                 image_result.onload=function(){    
                     result_context.drawImage(image_result, 0,0, width, height); 
@@ -199,12 +207,12 @@
             }
             result.width = width;
             result.height = height;
-            
-            var object_pixels_add = "{{ object_pixels }}";
-            var background_pixels_add = "{{ background_pixels }}";
-            var object_pixels_save = "{{ object_pixels }}".split(' ');
-            var background_pixels_save = "{{ background_pixels }}".split(' ');
-            if (object_pixels_add != "" || background_pixels_add!= "" ){
+
+            const object_pixels_add = "{{ object_pixels }}";
+            const background_pixels_add = "{{ background_pixels }}";
+            const object_pixels_save = "{{ object_pixels }}".split(' ');
+            const background_pixels_save = "{{ background_pixels }}".split(' ');
+            if (object_pixels_add !== "" || background_pixels_add!== "" ){
                 for (let i = 0; i < object_pixels_save.length-1 ; i+=2){
                     draw(Math.round(ratio*Number(object_pixels_save[i+1])), Math.round(ratio*Number(object_pixels_save[i])),yellow,y);
                 }
@@ -239,15 +247,17 @@
         // }
 
         function choose_pixel(e,pixels,color){
-            pushable = true;
+            let y;
+            let x;
+            let pushable = true;
             // для совместимости с другими браузерами
-            if(e.offsetX==undefined) {
-                var x = e.pageX-$(canvas).offset().left;
-                var y = Math.round(e.pageY-$(canvas).offset().top);
+            if(e.offsetX===undefined) {
+                x = e.pageX-$(canvas).offset().left;
+                y = Math.round(e.pageY-$(canvas).offset().top);
             } 
             else {
-                var x = e.offsetX;
-                var y = e.offsetY;
+                x = e.offsetX;
+                y = e.offsetY;
             }
             //Если нажал внутрь существующего кружочка, удаляем его
             for (let i = 0; i < pixels.length ; i++){
@@ -258,7 +268,7 @@
                     i--;
                     pushable = false;
                 }
-            };
+            }
             if(pushable){
                 pixels.push([Math.round(x/ratio),Math.round(y/ratio)]);
                 circle(x,y,radius,color);
@@ -266,13 +276,13 @@
             else {
                 for (let i = 0; i < object_pixels.length ; i++){
                     circle(ratio*object_pixels[i][0],ratio*object_pixels[i][1],radius,red);
-                };  
+                }
                 for (let i = 0; i < background_pixels.length ; i++){
                     circle(ratio*background_pixels[i][0],ratio*background_pixels[i][1],radius,green);
-                };  
+                }
 
             }   
-        };
+        }
         function dropping(){
             $.ajax({
                 url: 'http://127.0.0.1:8000/dropping',

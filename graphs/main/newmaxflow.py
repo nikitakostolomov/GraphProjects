@@ -36,8 +36,10 @@ def global_relabeling(ver, s, t):
     distances = bfs(ver, t, True)
     visited = [False] * len(ver)
     need_to_second_bfs = False
+    height_counter = 0
     for u in range(len(ver)):
         if distances[u] > ver[u]['h']:
+            height_counter = height_counter + distances[u] - ver[u]['h']
             ver[u]['h'] = distances[u]
             visited[u] = True
         elif distances[u] == -1 and u != s:
@@ -46,8 +48,10 @@ def global_relabeling(ver, s, t):
         distances = bfs(ver, s, True)
         for u in range(len(ver)):
             if not visited[u] and distances[u] > ver[u]['h']:
+                height_counter = height_counter + distances[u] - ver[u]['h']
                 ver[u]['h'] = distances[u]
                 visited[u] = True
+    return height_counter
 
 
 def push(ver, u, e, is_initial=False):
@@ -62,8 +66,7 @@ def push(ver, u, e, is_initial=False):
             need_to_del_edge = True
 
     if v not in ver[u]['adj_from']:
-        ver[v]['adj_to'].append(
-            {'v': u, 'f': 0, 'c': 0})
+        ver[v]['adj_to'].append({'v': u, 'f': 0, 'c': 0})
         ver[u]['adj_from'].append(v)
     rev_e = next(x for x in ver[v]['adj_to'] if x['v'] == u)
 
@@ -81,7 +84,27 @@ def relabel(ver, u):
     ver[u]['h'] = 1 + ver[min(ver[u]['adj_to'], key=lambda e: ver[e['v']]['h'])['v']]['h']
 
 
-def push_relabel_max_flow(graph, s, t, print_cut_edges=False):
+def print_graph(ver):
+    print(f"\n\n")
+    for i in range(len(ver)):
+        answer = f"i={i} h={ver[i]['h']} e={ver[i]['e']} adj_to=[ "
+        for e in ver[i]['adj_to']:
+            answer = answer + f"{{v={e['v']},f={e['f']}c={e['c']}}}"
+        answer = answer + f"] [ "
+        for e in ver[i]['adj_from']:
+            answer = answer + f"{e} "
+        print(answer + f"]")
+    print(f"\n\n")
+
+
+def print_queue(q, counter):
+    answer = f"i={counter} q=[ "
+    for i in range(len(q)):
+        answer = answer + f"{q[i]} "
+    print(answer + f"]")
+
+
+def push_relabel_max_flow(graph, s, t):
     m = graph[0][1]
 
     # stats
@@ -106,10 +129,18 @@ def push_relabel_max_flow(graph, s, t, print_cut_edges=False):
 
     counter = 0
 
+    # print_graph(ver)
+
+    need_to_do_gr = True
+
     while queue:
-        if counter >= m:
+        # print_graph(ver)
+        # print_queue(queue, counter)
+        if need_to_do_gr and counter >= m:
             # counter_global_relabeling = counter_global_relabeling + 1
-            global_relabeling(ver, s, t)
+            height_counter = global_relabeling(ver, s, t)
+            if height_counter == 0:
+                need_to_do_gr = False
             counter = 0
         u = queue.pop(0)
         to_del = set()
@@ -117,7 +148,8 @@ def push_relabel_max_flow(graph, s, t, print_cut_edges=False):
             v = e['v']
             if ver[u]['h'] == ver[v]['h'] + 1 and e['c'] > 0:
                 # counter_push = counter_push + 1
-                counter = counter + 1
+                if need_to_do_gr:
+                    counter = counter + 1
                 if push(ver, u, e):
                     to_del.add(v)
                 if v != s and v != t and v not in queue:
@@ -131,7 +163,8 @@ def push_relabel_max_flow(graph, s, t, print_cut_edges=False):
             ver[u]['adj_to'] = [e for e in ver[u]['adj_to'] if not e['v'] in to_del]
         if ver[u]['e'] > 0:
             # counter_relabel = counter_relabel + 1
-            counter = counter + 1
+            if need_to_do_gr:
+                counter = counter + 1
             relabel(ver, u)
             queue.append(u)
 
@@ -152,16 +185,15 @@ def push_relabel_max_flow(graph, s, t, print_cut_edges=False):
             c = edge['c']
             edges_to_save[(u, v)] = c
 
+    cut = set()
+    for edge in edges:
+        if edge[0] in obj and edge[1] in bg:
+            cut.add(edge)
+
+    # print_graph(ver)
+
     # print(f"\nNumber of pushing: {counter_push}")
     # print(f"Number of relabeling: {counter_relabel}")
     # print(f"Number of global relabeling: {counter_global_relabeling}\n")
-
-    if print_cut_edges:
-        cut = set()
-        for edge in edges:
-            if edge[0] in obj and edge[1] in bg:
-                cut.add(edge)
-    else:
-        cut = None
 
     return (obj, bg), ((len(ver), len(edges_to_save)), edges_to_save), ver[t]['e'], cut

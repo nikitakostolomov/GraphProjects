@@ -242,7 +242,7 @@ def get_min_cut(graph, need_to_print_cut_value=True, need_to_print_cut_edges=Fal
     s = 0
     t = graph[0][0] - 1
 
-    (obj, bg), graph_to_save, min_cut_value, min_cut_edges = push_relabel_max_flow(graph, s, t, need_to_print_cut_edges)
+    (obj, bg), graph_to_save, min_cut_value, min_cut_edges = push_relabel_max_flow(graph, s, t)
 
     if need_to_print_cut_value:
         print(f"\nMax flow: {min_cut_value}\n")
